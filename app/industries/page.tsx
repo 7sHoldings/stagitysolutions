@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Cta from "@/components/Cta";
+import Photo from "@/components/Photo";
 import { industries } from "@/lib/content";
 
 export const metadata: Metadata = {
@@ -38,7 +39,9 @@ export default function IndustriesPage() {
               flexDirection: i % 2 ? "row-reverse" : "row",
             }}
           >
-            <div className="media" style={{ flex: "1 1 420px", minWidth: 0, aspectRatio: "4 / 3", borderRadius: 20 }} aria-hidden="true" />
+            <div className="media" style={{ flex: "1 1 420px", minWidth: 0, aspectRatio: "4 / 3", borderRadius: 20 }}>
+              <Photo src={ind.image} alt={`Technology for ${ind.title.toLowerCase()}`} sizes="(max-width: 960px) 100vw, 600px" />
+            </div>
             <div style={{ flex: "1 1 420px", minWidth: 0, display: "flex", flexDirection: "column", gap: 20 }}>
               <p className="eyebrow">{String(i + 1).padStart(2, "0")}</p>
               <h2 className="h2">{ind.title}</h2>

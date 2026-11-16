@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Cta from "@/components/Cta";
+import Photo from "@/components/Photo";
 import { getService, services } from "@/lib/content";
 
 export function generateStaticParams() {
@@ -75,6 +76,12 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
           </aside>
         </div>
       </section>
+
+      <div className="container" style={{ marginBottom: 96 }}>
+        <div className="media" style={{ height: 420 }}>
+          <Photo src={s.image} alt={`${s.title} at Stagity Solutions`} sizes="(max-width: 1280px) 100vw, 1200px" priority />
+        </div>
+      </div>
 
       <section className="container" style={{ paddingBottom: 0 }}>
         <div className="split">

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Cta from "@/components/Cta";
 import { icons } from "@/components/Icons";
-import { coreServices, dataServices } from "@/lib/content";
+import Photo from "@/components/Photo";
+import { coreServices, dataServices, photos } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Services",
@@ -25,7 +26,13 @@ export default function ServicesPage() {
         </p>
       </section>
 
-      <section className="container section" style={{ paddingTop: 64 }}>
+      <div className="container">
+        <div className="media" style={{ height: 420 }}>
+          <Photo src={photos.services} alt="Team working together on laptops" sizes="(max-width: 1280px) 100vw, 1200px" priority />
+        </div>
+      </div>
+
+      <section className="container section" style={{ paddingTop: 96 }}>
         <div className="split">
           <div className="side">
             <p className="eyebrow">Core services</p>

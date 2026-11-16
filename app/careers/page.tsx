@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { company, jobs } from "@/lib/content";
+import Photo from "@/components/Photo";
+import { company, jobs, photos } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Careers",
@@ -21,6 +22,12 @@ export default function CareersPage() {
           working and grow together.
         </p>
       </section>
+
+      <div className="container" style={{ marginBottom: 96 }}>
+        <div className="media" style={{ height: 420 }}>
+          <Photo src={photos.careers} alt="Colleagues working together at a laptop" sizes="(max-width: 1280px) 100vw, 1200px" priority />
+        </div>
+      </div>
 
       <section className="dark">
         <div className="container section">

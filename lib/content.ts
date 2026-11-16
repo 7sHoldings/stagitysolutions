@@ -10,11 +10,22 @@ export const company = {
   url: "https://stagitysolutions.com",
 };
 
+const unsplash = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit=crop&q=80&w=1800`;
+
+export const photos = {
+  hero: unsplash("photo-1522071820081-009f0129c71c"),
+  about: unsplash("photo-1600880292203-757bb62b4baf"),
+  services: unsplash("photo-1519389950473-47ba0277781c"),
+  careers: unsplash("photo-1531482615713-2afd69097998"),
+  industries: unsplash("photo-1497366216548-37526070297c"),
+};
+
 export type Capability = { title: string; text: string };
 export type Step = { title: string; text: string };
 
 export type Service = {
   slug: string;
+  image: string;
   title: string;
   shortTitle?: string;
   group: "core" | "data";
@@ -44,6 +55,7 @@ const standardApproach = (build: string): Step[] => [
 export const services: Service[] = [
   {
     slug: "application-development",
+    image: unsplash("photo-1555066931-4365d14bab8c"),
     title: "Application Development",
     group: "core",
     summary:
@@ -79,6 +91,7 @@ export const services: Service[] = [
   },
   {
     slug: "cloud-services",
+    image: unsplash("photo-1451187580459-43490279c0fa"),
     title: "Cloud Services",
     group: "core",
     summary: "Strategy, migration and managed cloud on the platform that fits your business.",
@@ -113,6 +126,7 @@ export const services: Service[] = [
   },
   {
     slug: "business-intelligence-analytics",
+    image: unsplash("photo-1551288049-bebda4e38f71"),
     title: "Business Intelligence & Analytics",
     shortTitle: "BI & Analytics",
     group: "core",
@@ -148,6 +162,7 @@ export const services: Service[] = [
   },
   {
     slug: "enterprise-mobility",
+    image: unsplash("photo-1512941937669-90a1b58e7e9c"),
     title: "Enterprise Mobility",
     group: "core",
     summary: "Secure access to company apps and data from any device, anywhere.",
@@ -182,6 +197,7 @@ export const services: Service[] = [
   },
   {
     slug: "infrastructure-management",
+    image: unsplash("photo-1558494949-ef010cbdcc31"),
     title: "Infrastructure Management",
     group: "core",
     summary: "Core infrastructure that is monitored, optimized and ready to scale.",
@@ -216,6 +232,7 @@ export const services: Service[] = [
   },
   {
     slug: "business-process-outsourcing",
+    image: unsplash("photo-1553877522-43269d4ea984"),
     title: "Business Process Outsourcing",
     shortTitle: "BPO",
     group: "core",
@@ -251,6 +268,7 @@ export const services: Service[] = [
   },
   {
     slug: "data-architecture-engineering",
+    image: unsplash("photo-1544197150-b99a580bb7a8"),
     title: "Data Architecture & Engineering",
     group: "data",
     summary: "Modern warehouses, lakes and pipelines on Snowflake, BigQuery, Azure and SAP HANA.",
@@ -284,6 +302,7 @@ export const services: Service[] = [
   },
   {
     slug: "strategy-architecture",
+    image: unsplash("photo-1556761175-5973dc0f32e7"),
     title: "Strategy & Architecture",
     group: "data",
     summary: "Assessments, target-state design and a roadmap for cloud BI and migration.",
@@ -318,6 +337,7 @@ export const services: Service[] = [
   },
   {
     slug: "data-science-machine-learning",
+    image: unsplash("photo-1677442136019-21780ecad995"),
     title: "Data Science & Machine Learning",
     group: "data",
     summary: "Models that find patterns, predict outcomes and run reliably in production.",
@@ -360,6 +380,7 @@ export const services: Service[] = [
   },
   {
     slug: "modern-bi-analytics",
+    image: unsplash("photo-1460925895917-afdab827c52f"),
     title: "Modern BI & Analytics",
     group: "data",
     summary: "Self-service dashboards and reporting that everyone in the business can use.",
@@ -397,11 +418,12 @@ export const coreServices = services.filter((s) => s.group === "core");
 export const dataServices = services.filter((s) => s.group === "data");
 export const getService = (slug: string) => services.find((s) => s.slug === slug);
 
-export type Industry = { slug: string; title: string; summary: string; body: string[] };
+export type Industry = { slug: string; image: string; title: string; summary: string; body: string[] };
 
 export const industries: Industry[] = [
   {
     slug: "banking-finance",
+    image: unsplash("photo-1611974789855-9c2a0a7236a3"),
     title: "Banking & Finance",
     summary: "Full-cycle finance software and digital customer experiences.",
     body: [
@@ -411,6 +433,7 @@ export const industries: Industry[] = [
   },
   {
     slug: "insurance",
+    image: unsplash("photo-1450101499163-c8848c66ca85"),
     title: "Insurance",
     summary: "Smart document management and simpler day-to-day operations.",
     body: [
@@ -420,6 +443,7 @@ export const industries: Industry[] = [
   },
   {
     slug: "manufacturing-retail",
+    image: unsplash("photo-1581091226825-a6a2a5aee158"),
     title: "Manufacturing & Retail",
     summary: "Supply-chain visibility and consistent experiences across every channel.",
     body: [
@@ -429,6 +453,7 @@ export const industries: Industry[] = [
   },
   {
     slug: "health-care",
+    image: unsplash("photo-1576091160399-112ba8d25d1d"),
     title: "Health Care",
     summary: "Modern healthcare IT that cuts cost and supports compliance.",
     body: [

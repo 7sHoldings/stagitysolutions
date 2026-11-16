@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Cta from "@/components/Cta";
 import { icons } from "@/components/Icons";
-import { coreServices, dataServices, industries, jobs } from "@/lib/content";
+import Photo from "@/components/Photo";
+import { coreServices, dataServices, industries, jobs, photos } from "@/lib/content";
 
 export default function Home() {
   return (
@@ -33,7 +34,7 @@ export default function Home() {
 
       <div className="container">
         <div className="media hero-media">
-          {/* Replace with a real team / office photo: <Image src="/images/hero.jpg" fill alt="..." /> */}
+          <Photo src={photos.hero} alt="Stagity Solutions team collaborating around laptops" sizes="(max-width: 1280px) 100vw, 1200px" priority />
           <div className="facts">
             <div>
               <p className="fact-value">{coreServices.length}</p>
@@ -149,7 +150,9 @@ export default function Home() {
           <div className="card-grid">
             {industries.map((ind) => (
               <Link key={ind.slug} href={`/industries#${ind.slug}`} className="industry-card">
-                <div className="media" aria-hidden="true" />
+                <div className="media">
+                  <Photo src={ind.image} alt="" sizes="(max-width: 700px) 100vw, (max-width: 1200px) 50vw, 300px" />
+                </div>
                 <h3>{ind.title}</h3>
                 <p>{ind.summary}</p>
               </Link>

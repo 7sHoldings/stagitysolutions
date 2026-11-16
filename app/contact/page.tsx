@@ -49,6 +49,18 @@ export default function ContactPage() {
         </div>
       </section>
 
+      <section className="container" style={{ paddingBottom: 120 }}>
+        <div className="media" style={{ height: 420, background: "#E3E7EE" }}>
+          <iframe
+            title="Map showing Stagity Solutions office at 4101 McEwen Rd, Dallas, TX"
+            src="https://www.google.com/maps?q=4101+McEwen+Rd+Suite+517,+Dallas,+TX+75244&output=embed"
+            style={{ border: 0, width: "100%", height: "100%", display: "block" }}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        </div>
+      </section>
+
       {jobs.length > 0 && (
         <section className="tinted">
           <div className="container section-sm hero-row" style={{ alignItems: "center" }}>

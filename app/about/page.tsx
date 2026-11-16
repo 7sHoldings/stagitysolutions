@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Cta from "@/components/Cta";
+import Photo from "@/components/Photo";
+import { photos } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "About us",
@@ -26,7 +28,9 @@ export default function AboutPage() {
       </section>
 
       <div className="container">
-        <div className="media" style={{ height: 420 }} aria-hidden="true" />
+        <div className="media" style={{ height: 460 }}>
+          <Photo src={photos.about} alt="Business team meeting in a modern office" sizes="(max-width: 1280px) 100vw, 1200px" priority />
+        </div>
       </div>
 
       <section className="container section">

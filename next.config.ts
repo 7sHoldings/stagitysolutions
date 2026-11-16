@@ -26,6 +26,9 @@ const oldToNew: Record<string, string> = {
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  images: {
+    remotePatterns: [{ protocol: "https", hostname: "images.unsplash.com" }],
+  },
   async redirects() {
     return Object.entries(oldToNew).map(([source, destination]) => ({
       source,
