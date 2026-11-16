@@ -23,7 +23,7 @@ export default function Header() {
     <header className="site-header">
       <div className="container bar">
         <Link href="/" className="brand" aria-label="Stagity Solutions home">
-          <Image src="/logo.png" alt="Stagity Solutions — Empowered by Innovation" width={500} height={192} priority />
+          <Image src="/logo.png" alt="Stagity Solutions — Empowered by Innovation" width={432} height={164} priority />
         </Link>
         <button
           type="button"

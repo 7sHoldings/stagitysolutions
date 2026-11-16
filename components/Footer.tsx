@@ -9,7 +9,7 @@ export default function Footer() {
       <div className="container">
         <div className="footer-grid">
           <div className="footer-col">
-            <Image src="/logo.png" alt="Stagity Solutions" width={500} height={192} style={{ height: 64, width: "auto" }} />
+            <Image src="/logo.png" alt="Stagity Solutions" width={432} height={164} style={{ height: 76, width: "auto" }} />
             <p>IT services, consulting and Data &amp; AI for growing enterprises.</p>
           </div>
           <div className="footer-col">

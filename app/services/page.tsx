@@ -3,6 +3,7 @@ import Link from "next/link";
 import Cta from "@/components/Cta";
 import { icons } from "@/components/Icons";
 import Photo from "@/components/Photo";
+import NetworkCanvas from "@/components/NetworkCanvas";
 import { coreServices, dataServices, photos } from "@/lib/content";
 
 export const metadata: Metadata = {
@@ -53,7 +54,8 @@ export default function ServicesPage() {
         </div>
       </section>
 
-      <section className="dark" id="data-ai" style={{ scrollMarginTop: 80 }}>
+      <section className="dark has-network" id="data-ai" style={{ scrollMarginTop: 80 }}>
+        <NetworkCanvas />
         <div className="container section">
           <div className="section-head">
             <div className="titles">

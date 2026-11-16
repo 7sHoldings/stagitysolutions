@@ -2,6 +2,9 @@ import Link from "next/link";
 import Cta from "@/components/Cta";
 import { icons } from "@/components/Icons";
 import Photo from "@/components/Photo";
+import RotatingWord from "@/components/RotatingWord";
+import CountUp from "@/components/CountUp";
+import NetworkCanvas from "@/components/NetworkCanvas";
 import { coreServices, dataServices, industries, jobs, photos } from "@/lib/content";
 
 export default function Home() {
@@ -14,7 +17,9 @@ export default function Home() {
           IT services · Consulting · Data &amp; AI — Dallas, Texas
         </p>
         <h1 className="display-xl" style={{ maxWidth: 1060 }}>
-          Engineering the technology behind growing enterprises.
+          Engineering the <RotatingWord words={["technology", "software", "cloud", "data", "AI"]} />
+          <br />
+          behind growing enterprises.
         </h1>
         <div className="hero-row">
           <p className="lead" style={{ maxWidth: 600 }}>
@@ -37,11 +42,11 @@ export default function Home() {
           <Photo src={photos.hero} alt="Stagity Solutions team collaborating around laptops" sizes="(max-width: 1280px) 100vw, 1200px" priority />
           <div className="facts">
             <div>
-              <p className="fact-value">{coreServices.length}</p>
+              <p className="fact-value"><CountUp to={coreServices.length} /></p>
               <p className="fact-label">core service lines</p>
             </div>
             <div>
-              <p className="fact-value">{industries.length}</p>
+              <p className="fact-value"><CountUp to={industries.length} /></p>
               <p className="fact-label">industries served</p>
             </div>
             <div>
@@ -53,6 +58,20 @@ export default function Home() {
               <p className="fact-label">headquarters</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Technologies */}
+      <div className="marquee" aria-label="Technologies we work with">
+        <p className="marquee-label">Technologies we work with</p>
+        <div className="marquee-track">
+          {[0, 1].map((copy) =>
+            ["Java", ".NET", "PHP", "Angular", "SAP", "SAP HANA", "SQL", "Snowflake", "Google BigQuery", "Azure Synapse", "AWS", "Microsoft Azure", "Google Cloud", "Hadoop"].map((t) => (
+              <span key={`${copy}-${t}`} className="marquee-item" aria-hidden={copy === 1 ? true : undefined}>
+                {t}
+              </span>
+            )),
+          )}
         </div>
       </div>
 
@@ -82,7 +101,8 @@ export default function Home() {
       </section>
 
       {/* Data & AI */}
-      <section className="dark" id="data-ai">
+      <section className="dark has-network" id="data-ai">
+        <NetworkCanvas />
         <div className="container section">
           <div className="section-head">
             <div className="titles">
