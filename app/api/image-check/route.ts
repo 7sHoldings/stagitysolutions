@@ -6,15 +6,12 @@ export async function GET() {
   const urls: Record<string, string> = { ...photos };
   services.forEach((s) => (urls[s.slug] = s.image));
   industries.forEach((i) => (urls[i.slug] = i.image));
-  const results = await Promise.all(
+  const out: Record<string, string> = {};
+  await Promise.all(
     Object.entries(urls).map(async ([k, u]) => {
-      try {
-        const r = await fetch(u, { method: "HEAD" });
-        return [k, r.status, r.headers.get("content-type")];
-      } catch (e) {
-        return [k, "ERR", String(e)];
-      }
+      const r = await fetch(u.replace("w=1800", "w=220").replace("q=80", "q=40"));
+      out[k] = Buffer.from(await r.arrayBuffer()).toString("base64");
     }),
   );
-  return Response.json(results);
+  return Response.json(out);
 }
