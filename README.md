@@ -20,6 +20,7 @@ npm run dev                  # http://localhost:3000
 | Job openings | `lib/content.ts` → `jobs` (remove all to hide the careers strip) |
 | Colors, fonts, spacing | `app/globals.css` (top of file) |
 | Home page layout | `app/page.tsx` |
+| Chatbot & FAQ questions/answers | `lib/faq.ts` (shown in the chat and on /faq) |
 | Old WordPress URL redirects | `next.config.ts` |
 
 Photo placeholders are the grey `.media` boxes — add images to `public/images/` and use `next/image`.
@@ -34,3 +35,9 @@ Photo placeholders are the grey `.media` boxes — add images to `public/images/
 ## Contact form
 
 Submissions go to the `stagity_contact_submissions` table in the **Stagity-Solutions** Supabase project. Visitors can only insert rows (row-level security); view messages in Supabase → Table Editor.
+
+## Chat assistant
+
+The chat bubble answers from the question bank in `lib/faq.ts` — no AI service or API cost. It matches what visitors type using keywords (`lib/faqMatch.ts`). When it can't find an answer, it shows a short contact form that saves to `stagity_contact_submissions` (interest = "Chat assistant").
+
+Every question typed in the chat is logged to `stagity_chat_questions`. Check rows where `answered = false` to see what to add to the FAQ next.
