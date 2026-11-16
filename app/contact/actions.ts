@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
+import { notifyNewLead } from "@/lib/notify";
 
 export type ContactState = { status: "idle" | "ok" | "error"; message?: string };
 
@@ -39,6 +40,13 @@ export async function submitContact(_prev: ContactState, formData: FormData): Pr
   if (error) {
     console.error("Contact form insert failed:", error.message);
     return { status: "error", message: "Sorry, something went wrong. Please try again or email us." };
+  }
+
+  try {
+    await notifyNewLead({ name, email, company, phone, interest, message });
+  } catch (e) {
+    // The message is already saved in Supabase, so the visitor still sees success.
+    console.error("Lead email alert failed:", e);
   }
 
   return { status: "ok", message: "Thanks — your message is on its way. We'll get back to you within one business day." };

@@ -31,6 +31,9 @@ Photo placeholders are the grey `.media` boxes — add images to `public/images/
 | --- | --- |
 | `SUPABASE_URL` | Supabase project URL (`Stagity-Solutions` project) |
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key |
+| `SMTP_USER` | Google Workspace address that sends the alerts (hr@stagitysolutions.com) |
+| `SMTP_PASS` | Google App Password for that account (Sensitive) |
+| `NOTIFY_TO` | Optional — where enquiry alerts go (defaults to SMTP_USER) |
 
 ## Contact form
 
