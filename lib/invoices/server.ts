@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/i9/server";
-import { addDays, monthEnd, monthStart, mondayOf, periodFor, round2, todayCT } from "@/lib/portal/dates";
+import { addDays, monthEnd, monthStart, weekStartOf, periodFor, round2, todayCT } from "@/lib/portal/dates";
 
 export type Vendor = {
   id: string; name: string; ap_email: string; cc_emails: string | null; address: string | null;
@@ -77,7 +77,7 @@ export async function syncDraftInvoices(personId: string): Promise<string | null
 
   const groups = new Map<string, string[]>();
   for (const d of days) {
-    const start = vendor.billing_cycle === "weekly" ? mondayOf(d.work_date) : monthStart(d.work_date);
+    const start = vendor.billing_cycle === "weekly" ? weekStartOf(d.work_date) : monthStart(d.work_date);
     groups.set(start, [...(groups.get(start) ?? []), d.id]);
   }
   for (const [start, ids] of groups) {

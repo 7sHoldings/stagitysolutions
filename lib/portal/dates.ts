@@ -15,14 +15,9 @@ export function addDays(d: string, n: number): string {
   return fromDate(x);
 }
 
-/** Monday of the week containing d (weeks run Monday–Sunday). */
-export function mondayOf(d: string): string {
-  const dow = toDate(d).getUTCDay(); // 0 = Sunday
-  return addDays(d, dow === 0 ? -6 : 1 - dow);
-}
-
-export function weekDates(monday: string): string[] {
-  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+/** Sunday that starts the workweek containing d. Stagity's workweek runs Sunday–Saturday. */
+export function weekStartOf(d: string): string {
+  return addDays(d, -toDate(d).getUTCDay());
 }
 
 export const monthStart = (d: string) => d.slice(0, 8) + "01";
@@ -35,14 +30,18 @@ export const monthEnd = (month: string) => addDays(addMonths(month, 1), -1);
 
 /** Approved timesheets for a month are due by the 5th of the next month. */
 export const deadlineFor = (month: string) => addMonths(month, 1).slice(0, 8) + "05";
-/** Payroll for a month is paid on the 20th of the next month. */
-export const payDateFor = (month: string) => addMonths(month, 1).slice(0, 8) + "20";
+/** Payroll for a month is paid on the 20th of the next month, or the Friday before if that's a weekend. */
+export function payDateFor(month: string): string {
+  const d = addMonths(month, 1).slice(0, 8) + "20";
+  const dow = toDate(d).getUTCDay();
+  return dow === 6 ? addDays(d, -1) : dow === 0 ? addDays(d, -2) : d; // weekend → the Friday before
+}
 
-/** Mondays of every week that has at least one day in the month. */
-export function weeksInMonth(month: string): string[] {
-  const out: string[] = [];
-  for (let m = mondayOf(monthStart(month)); m <= monthEnd(month); m = addDays(m, 7)) out.push(m);
-  return out;
+/** Business day before payroll: the ADP sheet must be ready that morning (upload before 3 PM). */
+export function payrollSheetDate(month: string): string {
+  let d = addDays(payDateFor(month), -1);
+  while ([0, 6].includes(toDate(d).getUTCDay())) d = addDays(d, -1);
+  return d;
 }
 
 export function monthLabel(month: string) {
@@ -53,13 +52,9 @@ export function shortDate(d: string) {
   return toDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-export function weekLabel(monday: string) {
-  return `${shortDate(monday)} – ${shortDate(addDays(monday, 6))}`;
-}
+export const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-/** FLSA overtime: hours over 40 in the workweek (Mon–Sun), counted in day order. */
+/** FLSA overtime: hours over 40 in the workweek (Sun–Sat), counted in day order. */
 export function splitOvertime(hours: number[]): { regular: number; overtime: number }[] {
   let running = 0;
   return hours.map((h) => {
@@ -73,18 +68,18 @@ export const round2 = (n: number) => Math.round(n * 100) / 100;
 export const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 // ---------- Timesheet periods ----------
-// A timesheet covers one Mon–Sun week, split at month boundaries, so every month's hours can be
-// finished and approved on their own (e.g. Mon Aug 31 is its own period; Sep 1–6 is the next).
+// A timesheet covers one Sun–Sat week, split at month boundaries, so every month's hours can be
+// finished and approved on their own (e.g. Sun Aug 30–Mon Aug 31 is one period; Tue Sep 1–Sat Sep 5 the next).
 
 export type Period = { start: string; end: string };
 
 /** The timesheet period that contains a date. */
 export function periodFor(d: string): Period {
-  const mon = mondayOf(d);
+  const ws = weekStartOf(d);
   const ms = monthStart(d);
   const me = monthEnd(d);
-  const sun = addDays(mon, 6);
-  return { start: mon > ms ? mon : ms, end: sun < me ? sun : me };
+  const we = addDays(ws, 6);
+  return { start: ws > ms ? ws : ms, end: we < me ? we : me };
 }
 
 /** True if d is the first day of a timesheet period. */
@@ -104,7 +99,7 @@ export function datesBetween(start: string, end: string): string[] {
 }
 
 export const isWeekend = (d: string) => [0, 6].includes(new Date(d + "T00:00:00Z").getUTCDay());
-export const dayName = (d: string) => dayNames[(new Date(d + "T00:00:00Z").getUTCDay() + 6) % 7];
+export const dayName = (d: string) => dayNames[new Date(d + "T00:00:00Z").getUTCDay()];
 
 export function periodLabel(p: Period) {
   return p.start === p.end ? shortDate(p.start) : `${shortDate(p.start)} – ${shortDate(p.end)}`;

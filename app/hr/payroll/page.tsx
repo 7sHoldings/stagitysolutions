@@ -13,7 +13,7 @@ export default async function Payroll() {
       <HrNav active="/hr/payroll" email={hr} />
       <h1 className="h2">Payroll</h1>
       <p className="muted">
-        Each month&apos;s approved timesheets (due by the 5th) are paid on the 20th of the next month. Calculate the payroll, add any bonuses
+        Each month&apos;s approved timesheets (due by the 5th) are paid on the 20th of the next month (the Friday before if the 20th is a weekend). The final ADP sheet is emailed to you the morning of the business day before payroll. Calculate the payroll, add any bonuses
         or reimbursements, lock it, then download the file and import it into ADP RUN.
       </p>
       <NewRunForm defaultMonth={last} />

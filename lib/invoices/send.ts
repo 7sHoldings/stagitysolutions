@@ -2,7 +2,7 @@ import "server-only";
 import { audit, db, hrEmails } from "@/lib/i9/server";
 import { send } from "@/lib/i9/mail";
 import { TS_BUCKET } from "@/lib/portal/server";
-import { addDays, mondayOf, money, monthLabel, shortDate, todayCT } from "@/lib/portal/dates";
+import { addDays, weekStartOf, money, monthLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import { company } from "@/lib/content";
 import { buildInvoicePdf, type InvoicePdfData } from "./pdf";
 import { recomputeDraft, type Invoice, type Vendor } from "./server";
@@ -26,7 +26,7 @@ export async function pdfData({ inv, vendor, person }: Loaded): Promise<InvoiceP
   const { data: days } = await db().from("stagity_timesheet_days").select("work_date, hours").eq("invoice_id", inv.id);
   const byWeek = new Map<string, number>();
   for (const day of days ?? []) {
-    const m = mondayOf(day.work_date);
+    const m = weekStartOf(day.work_date);
     byWeek.set(m, (byWeek.get(m) ?? 0) + Number(day.hours));
   }
   const weeks = [...byWeek].sort(([a], [b]) => a.localeCompare(b)).map(([m, hours]) => {

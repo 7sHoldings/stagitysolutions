@@ -84,8 +84,8 @@ export default async function HrTimesheets({ searchParams }: { searchParams: Pro
         hours go on that month&apos;s payroll.
       </p>
       <p className="muted i9-small">
-        Automatic reminders: Fridays; the 25th, 28th and last day of the month; the 1st, 3rd and 5th (deadline); then the 8th, 12th and
-        15th for anyone still missing before payroll. HR gets a summary on the 6th and the 16th.
+        Automatic reminders (one email a day at most): every Tuesday for last week (Sun–Sat), then Wednesday–Friday if it&apos;s still
+        missing; and every 2 days for anything missing from last month (deadline the 5th) until it&apos;s in. HR gets a summary on the 6th.
       </p>
     </section>
   );

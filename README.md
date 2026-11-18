@@ -60,17 +60,17 @@ completes and signs Section 2, then records the E-Verify case number and result.
 that file and re-check the field names in `lib/i9/pdf.ts`.
 
 **Timesheets.** Consultants enter hours for every weekday (0 for holidays/days off; weekends optional) and upload the timesheet their client
-approved. Timesheets cover a Mon–Sun week **split at month end** (e.g. Mon Aug 31 is its own period, Sep 1–6 the next), so each month can be
-completed on its own. HR approves or sends back with a note. Overtime (over 40 h per Mon–Sun workweek, across a split) is calculated automatically.
+approved. Timesheets cover a Sun–Sat week **split at month end** (e.g. Sun Aug 30–Mon Aug 31 is one period, Tue Sep 1–Sat Sep 5 the next), so each month can be
+completed on its own. HR approves or sends back with a note. Overtime (over 40 h per Sun–Sat workweek, across a split) is calculated automatically.
 
 | Rule | Value |
 | --- | --- |
 | Approved timesheets for a month are due | 5th of the next month |
-| Payroll for that month is paid | 20th of the next month |
+| Payroll for that month is paid | 20th of the next month (Friday before if the 20th is a Saturday or Sunday) |
 | Late timesheets | accepted until payroll is locked (before the 20th); approved after that → next month's payroll |
-| Reminders (daily cron, `vercel.json`) | Fridays; 25th, 28th, last day; 1st, 3rd, 5th; overdue on 8th, 12th, 15th; HR summary on the 6th and 16th |
+| Reminders (daily cron, `vercel.json`) | Tuesday for last week (Sun–Sat), again Wed–Fri if missing; every 2 days for last month's gaps until filled; one email/day max; HR summary on the 6th |
 | Vendor invoices | sent automatically each morning once a consultant's period (usually the month) is over and fully approved (can be turned off) |
-| Payroll sheet | draft refreshed and emailed to HR with the ADP RUN file on the 16th and 19th |
+| Payroll sheet | preview 3 business days before payroll; final ADP RUN sheet the morning of the business day before payroll (upload before 3 PM) |
 
 **Payroll.** HR calculates the month's payroll (approved hours × rate, overtime × 1.5), adds bonuses or reimbursements, locks it (hours are
 marked paid so they can't be paid twice) and downloads the CSV for **ADP RUN** import. ADP calculates taxes, deductions and net pay.

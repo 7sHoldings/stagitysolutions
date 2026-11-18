@@ -57,7 +57,7 @@ export default async function PortalHome() {
           <h2 className="i9-h3">Weekly timesheets</h2>
           <p className="muted i9-small">
             Each week, enter your hours for every weekday (0 for holidays or days off) and upload the timesheet your client approved.
-            Weeks that cross into a new month are split, so each month can be finished on its own. {monthLabel(closingMonth)} timesheets
+            Weeks run Sunday–Saturday; weeks that cross into a new month are split, so each month can be finished on its own. {monthLabel(closingMonth)} timesheets
             are due by <strong>{deadlineFor(closingMonth)}</strong> and must be in before payroll on {payDateFor(closingMonth)}.
           </p>
           <div className="i9-weeks">

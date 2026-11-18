@@ -1,9 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import { db, hrEmails, siteOrigin } from "@/lib/i9/server";
 import { send } from "@/lib/i9/mail";
-import { addDays, addMonths, deadlineFor, money, monthEnd, monthLabel, monthStart, payDateFor, periodFor, periodLabel, todayCT } from "@/lib/portal/dates";
+import { addDays, addMonths, deadlineFor, money, monthLabel, monthStart, payDateFor, payrollSheetDate, periodFor, periodLabel, todayCT, weekStartOf, type Period } from "@/lib/portal/dates";
 import { sendHrDigest, sendTimesheetReminder } from "@/lib/portal/mail";
-import { missingPeriods, monthOverview } from "@/lib/portal/timesheets";
+import { missingPeriods, monthOverview, type ConsultantRow, type SheetRow } from "@/lib/portal/timesheets";
 import { ensureDraftRun, gross, payrollCsv } from "@/lib/portal/payroll";
 import { autoSendInvoices } from "@/lib/invoices/auto";
 
@@ -11,17 +11,16 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 /**
- * Runs every morning (vercel.json). US Central time.
+ * Runs every morning (vercel.json). US Central time. Workweeks run Sunday–Saturday.
  *
- * 1. Timesheet reminders to consultants
- *    Friday               → this week's timesheet
- *    25th, 28th, last day → anything missing for the current month
- *    1st, 3rd, 5th        → last month, due on the 5th
- *    8th, 12th, 15th      → last month, overdue: must be in before payroll on the 20th
- * 2. HR summaries on the 6th and 16th (who's still missing)
+ * 1. Timesheet reminders to consultants (at most one email per person per day, listing everything missing)
+ *    Tuesday              → invite to fill last week (Sun–Sat) + upload the approved screenshot
+ *    Wednesday–Friday     → again, if last week still isn't submitted
+ *    Every 2 days         → anything missing for last month (1st, 3rd, 5th = deadline, 7th, …) until it's in
+ * 2. HR summary on the 6th (who missed the deadline)
  * 3. Vendor invoices: any invoice whose period is over and fully approved is sent automatically
- * 4. Payroll: on the 16th and 19th the draft payroll for last month is refreshed and emailed to HR
- *    with the ADP RUN file attached (payroll runs on the 20th)
+ * 4. Payroll (20th; Friday before if it's a weekend): a preview sheet 3 business days before,
+ *    and the final ADP RUN sheet on the morning of the business day before payroll
  */
 async function once(personId: string | null, kind: string, today: string) {
   const { error } = await db().from("stagity_reminder_log").insert({ person_id: personId, kind, sent_on: today });
@@ -45,55 +44,63 @@ export async function GET(req: Request) {
   const log: string[] = [];
 
   // ---- 1. Consultant reminders ----
-  if (isFriday) {
-    const current = periodFor(today);
-    const { consultants, sheet } = await monthOverview(thisMonth);
-    for (const p of consultants.filter((c) => c.active)) {
-      if ((p.start_date && p.start_date > today) || (p.end_date && p.end_date < current.start)) continue;
-      const s = sheet(p.id, current.start);
-      if (s && ["submitted", "approved"].includes(s.status)) continue;
-      if (!(await once(p.id, "weekly", today))) continue;
-      await sendTimesheetReminder(p.email, p.first_name, `Timesheet reminder: ${periodLabel(current)}`, [
-        `Please enter your hours for ${periodLabel(current)} (every weekday; 0 for holidays or days off) and upload the timesheet approved in your client's portal.`,
-      ], portal);
-      log.push(`weekly:${p.email}`);
+  const dow = new Date(today + "T00:00:00Z").getUTCDay(); // 0 = Sunday
+  const weekly = dow >= 2 && dow <= 5; // Tue–Fri
+  const everyOtherDay = day % 2 === 1; // 1st, 3rd, 5th, …
+  const lastWeekStart = addDays(weekStartOf(today), -7);
+  const lastWeek: Period[] = [...new Map([periodFor(lastWeekStart), periodFor(addDays(lastWeekStart, 6))].map((x) => [x.start, x])).values()];
+
+  type Need = { p: ConsultantRow; periods: Period[]; overdue: boolean };
+  const needs = new Map<string, Need>();
+  const add = (p: ConsultantRow, periods: Period[], overdue = false) => {
+    if (!periods.length) return;
+    const n = needs.get(p.id) ?? { p, periods: [], overdue: false };
+    for (const x of periods) if (!n.periods.some((y) => y.start === x.start)) n.periods.push(x);
+    n.overdue ||= overdue;
+    needs.set(p.id, n);
+  };
+  const views = new Map<string, { consultants: ConsultantRow[]; sheet: (pid: string, start: string) => SheetRow | undefined }>();
+  const view = async (m: string) => views.get(m) ?? views.set(m, await monthOverview(m)).get(m)!;
+
+  if (weekly) {
+    // Last week (both halves if it crossed into a new month); on Tuesday also any older gaps this month.
+    for (const m of [...new Set([monthStart(lastWeekStart), monthStart(addDays(lastWeekStart, 6)), thisMonth])]) {
+      const { consultants, sheet } = await view(m);
+      for (const p of consultants.filter((c) => c.active)) {
+        const missing = missingPeriods(p, m, sheet).filter((x) => (dow === 2 ? x.end < today : lastWeek.some((w) => w.start === x.start)));
+        add(p, missing);
+      }
+    }
+  }
+  if (everyOtherDay) {
+    // Last month (and the month before, in case anything is still outstanding after payroll).
+    for (const m of [lastMonth, addMonths(lastMonth, -1)]) {
+      const { consultants, sheet } = await view(m);
+      for (const p of consultants.filter((c) => c.active)) add(p, missingPeriods(p, m, sheet), today > deadlineFor(m));
     }
   }
 
-  const monthEndDay = [25, 28].includes(day) || monthEnd(thisMonth) === today;
-  const dueDay = [1, 3, 5].includes(day);
-  const overdueDay = [8, 12, 15].includes(day);
-  if (monthEndDay || dueDay || overdueDay) {
-    const month = monthEndDay ? thisMonth : lastMonth;
-    const { consultants, sheet } = await monthOverview(month);
-    for (const p of consultants.filter((c) => c.active)) {
-      // At month end, don't nag about the period that's still in progress.
-      const missing = missingPeriods(p, month, sheet).filter((x) => !(monthEndDay && x.end >= today && monthEnd(thisMonth) !== today));
-      if (!missing.length) continue;
-      if (!(await once(p.id, "monthly", today))) continue;
-      const list = missing.map(periodLabel).join(", ");
-      const [subject, lines] = overdueDay
-        ? [
-            `Overdue: ${monthLabel(month)} timesheets needed before payroll`,
-            [
-              `Your ${monthLabel(month)} timesheets were due on ${deadlineFor(month)} and we still need: ${list}.`,
-              `Please submit them as soon as possible. They must be in and approved before payroll on ${payDateFor(month)}, or those hours move to the following month's payroll.`,
-            ],
-          ]
-        : [
-            day === 5 ? `Today is the deadline: ${monthLabel(month)} timesheets` : `Reminder: ${monthLabel(month)} timesheets due ${deadlineFor(month)}`,
-            [
-              `We still need your client-approved timesheets for: ${list}.`,
-              `Fill in every weekday (0 for holidays or days off). The deadline is ${deadlineFor(month)}.`,
-            ],
-          ];
-      await sendTimesheetReminder(p.email, p.first_name, subject, lines, portal);
-      log.push(`monthly:${p.email}`);
-    }
+  for (const { p, periods, overdue } of needs.values()) {
+    if (!(await once(p.id, "timesheet-reminder", today))) continue;
+    periods.sort((a, b) => a.start.localeCompare(b.start));
+    const lastM = periods.some((x) => monthStart(x.start) === lastMonth) && today <= payrollSheetDate(lastMonth);
+    const subject = overdue
+      ? `Overdue timesheets: please submit before payroll`
+      : dow === 2 && periods.some((x) => lastWeek.some((w) => w.start === x.start))
+        ? `Please submit your timesheet for ${periodLabel({ start: lastWeekStart, end: addDays(lastWeekStart, 6) })}`
+        : "Reminder: timesheets to submit";
+    await sendTimesheetReminder(p.email, p.first_name, subject, [
+      `Please fill in your hours and upload a screenshot of the approved timesheet from your client or vendor portal for: ${periods.map(periodLabel).join(", ")}.`,
+      "Enter hours for every weekday. Put 0 for holidays or days you didn't work.",
+      ...(lastM
+        ? [`${monthLabel(lastMonth)} timesheets ${today > deadlineFor(lastMonth) ? "were" : "are"} due by ${deadlineFor(lastMonth)} and must be in before payroll on ${payDateFor(lastMonth)}.`]
+        : []),
+    ], portal);
+    log.push(`reminder:${p.email}`);
   }
 
   // ---- 2. HR summaries ----
-  if (day === 6 || day === 16) {
+  if (day === 6) {
     const { consultants, sheet } = await monthOverview(lastMonth);
     const missing = consultants
       .filter((c) => c.active)
@@ -128,9 +135,16 @@ export async function GET(req: Request) {
   }
 
   // ---- 4. Payroll sheet ----
-  if (day === 16 || day === 19) {
+  const sheetDay = payrollSheetDate(lastMonth);
+  let previewDay = sheetDay;
+  for (let i = 0; i < 2; ) {
+    previewDay = addDays(previewDay, -1);
+    if (![0, 6].includes(new Date(previewDay + "T00:00:00Z").getUTCDay())) i++;
+  }
+  const finalSheet = today === sheetDay;
+  if (finalSheet || today === previewDay) {
     const run = await ensureDraftRun(lastMonth, "automatic");
-    if (run && run.status === "draft" && (await once(null, "payroll-sheet", today))) {
+    if (run && run.status === "draft" && (await once(null, finalSheet ? "payroll-sheet-final" : "payroll-sheet-preview", today))) {
       const { filename, body, items } = await payrollCsv(run.id);
       const total = items.reduce((a, i) => a + gross(i), 0);
       const { consultants, sheet } = await monthOverview(lastMonth);
@@ -139,14 +153,14 @@ export async function GET(req: Request) {
       for (const to of hrEmails()) {
         await send(
           to,
-          `Payroll for ${monthLabel(lastMonth)} is ready for review (pays ${run.pay_date})`,
+          finalSheet ? `ADP payroll sheet for ${monthLabel(lastMonth)}: upload today before 3 PM (pays ${run.pay_date})` : `Payroll preview for ${monthLabel(lastMonth)} (pays ${run.pay_date})`,
           [
             `The ${monthLabel(lastMonth)} payroll sheet is attached for ADP RUN: ${items.length} consultant(s), estimated gross ${money(total)}.`,
             ...(missing.length ? [`Still missing timesheets (not included yet): ${missing.join(", ")}.`] : ["All timesheets for the month are in."]),
             ...(noAdp ? [`${noAdp} consultant(s) have no ADP employee ID yet. Add it on their profile.`] : []),
-            day === 19
-              ? "Payroll runs tomorrow. Review it, add any bonuses or reimbursements, then lock it in the HR portal after importing into ADP."
-              : "Review it in the HR portal. It updates automatically as more timesheets are approved; you'll get a final copy on the 19th.",
+            finalSheet
+              ? `This is the final sheet. Upload it to ADP RUN today before 3 PM for payroll on ${run.pay_date}, then lock the payroll in the HR portal.`
+              : `This is a preview. It updates as more timesheets are approved; the final sheet arrives on the morning of ${sheetDay}.`,
           ],
           { label: "Open payroll", href: `${siteOrigin()}/hr/payroll/${run.id}` },
           { attachments: [{ filename, content: Buffer.from(body), contentType: "text/csv" }] },

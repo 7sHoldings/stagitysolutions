@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/i9/server";
-import { addDays, monthEnd, monthStart, mondayOf, periodsInMonth, round2, splitOvertime, todayCT, type Period } from "./dates";
+import { addDays, monthEnd, monthStart, weekStartOf, periodsInMonth, round2, splitOvertime, todayCT, type Period } from "./dates";
 
 export type SheetRow = { id: string; person_id: string; week_start: string; status: string; total_hours: number; submitted_at: string | null };
 export type ConsultantRow = {
@@ -63,11 +63,11 @@ export async function monthStatus(personId: string, month: string) {
 }
 
 /**
- * Overtime is hours over 40 in a Mon–Sun workweek, even when the week is split across two
+ * Overtime is hours over 40 in a Sun–Sat workweek, even when the week is split across two
  * timesheets at month end. Recomputes the split for every unpaid day in that workweek.
  */
 export async function recomputeWeekOvertime(personId: string, anyDate: string) {
-  const mon = mondayOf(anyDate);
+  const mon = weekStartOf(anyDate); // Sunday
   const { data: days } = await db()
     .from("stagity_timesheet_days")
     .select("id, work_date, hours, payroll_run_id")
