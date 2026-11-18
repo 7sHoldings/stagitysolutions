@@ -15,7 +15,7 @@ export default function HrNav({ active, email }: { active: string; email: string
   return (
     <div className="i9-stack no-print" style={{ gap: 18 }}>
       <div className="hero-row" style={{ alignItems: "center" }}>
-        <p className="eyebrow">Stagity HR portal</p>
+        <span />
         <form action={signOut} className="i9-signout">
           <span className="muted">{email}</span>
           <button className="btn btn-outline" style={{ minHeight: 40, padding: "8px 18px" }}>Sign out</button>

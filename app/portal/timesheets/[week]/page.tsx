@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/i9/server";
 import { requirePerson, TS_BUCKET } from "@/lib/portal/server";
-import { datesBetween, isPeriodStart, periodFor, periodLabel, submitFrom, todayCT } from "@/lib/portal/dates";
+import { datesBetween, dayName, isPeriodStart, periodFor, shortDate, submitFrom, todayCT } from "@/lib/portal/dates";
 import TimesheetForm from "./TimesheetForm";
 
 export default async function TimesheetPage({ params }: { params: Promise<{ week: string }> }) {
@@ -32,18 +32,19 @@ export default async function TimesheetPage({ params }: { params: Promise<{ week
       <p><Link href="/portal">← Portal home</Link></p>
       <div>
         <p className="eyebrow">Timesheet</p>
-        <h1 className="h2">{periodLabel(period)}</h1>
+        <h1 className="h2">{period.start === period.end ? `${dayName(period.start)} ${shortDate(period.start)}` : `${dayName(period.start)} ${shortDate(period.start)} – ${dayName(period.end)} ${shortDate(period.end)}`}</h1>
       </div>
       {sheet?.status === "rejected" && (
-        <p className="form-status err">HR sent this back: {sheet.review_note || "please review and resubmit."}</p>
+        <p className="form-status err"><strong>Not approved:</strong> {sheet.review_note || "please review and resubmit."} Fix it below and submit again.</p>
       )}
-      {sheet?.status === "submitted" && <p className="form-status ok">Submitted. HR is reviewing it.</p>}
+      {sheet?.status === "submitted" && <p className="form-status ok">Submitted. Waiting for HR to approve.</p>}
       {sheet?.status === "approved" && <p className="form-status ok">Approved by HR.</p>}
       <TimesheetForm
         week={week}
         dates={dates}
         employment={{ start: p.start_date, end: p.end_date }}
         canSubmit={submitFrom(period) <= todayCT()}
+        submitFromLabel={`${dayName(submitFrom(period))}, ${shortDate(submitFrom(period))}`}
         initialHours={hours}
         initialNotes={sheet?.notes ?? ""}
         editable={editable}

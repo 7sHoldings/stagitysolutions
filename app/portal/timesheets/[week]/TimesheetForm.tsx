@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { getTimesheetUploadUrl, recordTimesheetFile, removeTimesheetFile, saveTimesheet } from "../actions";
 import { dayName, isWeekend, shortDate } from "@/lib/portal/dates";
 
 type F = { id: string; name: string; url?: string };
 
-/** Shrinks big photos/screenshots to a sharp JPEG (max 2400px) so uploads are quick and can be checked automatically. */
+/** Shrinks big photos/screenshots to a sharp JPEG (max 2400px) so uploads are quick. */
 async function prepare(file: File): Promise<{ blob: Blob; mime: string }> {
   if (!file.type.startsWith("image/") || file.type === "image/heic" || file.type === "image/heif" || file.size < 1_500_000) {
     return { blob: file, mime: file.type };
@@ -26,19 +26,38 @@ async function prepare(file: File): Promise<{ blob: Blob; mime: string }> {
   }
 }
 
-export default function TimesheetForm({ week, dates, initialHours, initialNotes, editable, initialFiles, employment, canSubmit }: {
+const round = (n: number) => Math.round(n * 100) / 100;
+
+export default function TimesheetForm({ week, dates, initialHours, initialNotes, editable, initialFiles, employment, canSubmit, submitFromLabel }: {
   week: string; dates: string[]; initialHours: (number | null)[]; initialNotes: string; editable: boolean; initialFiles: F[];
-  employment: { start: string | null; end: string | null }; canSubmit: boolean;
+  employment: { start: string | null; end: string | null }; canSubmit: boolean; submitFromLabel: string;
 }) {
-  const employed = (d: string) => (!employment.start || d >= employment.start) && (!employment.end || d <= employment.end);
   const router = useRouter();
+  const employed = (d: string) => (!employment.start || d >= employment.start) && (!employment.end || d <= employment.end);
   const [hours, setHours] = useState(initialHours.map((h) => (h === null ? "" : String(h))));
   const [notes, setNotes] = useState(initialNotes);
   const [files, setFiles] = useState<F[]>(initialFiles);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok?: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
-  const total = hours.reduce((a, h) => a + (Number(h) || 0), 0);
+  const snapshot = (h: string[], n: string) => JSON.stringify([h, n]);
+  const [saved, setSaved] = useState(() => snapshot(initialHours.map((h) => (h === null ? "" : String(h))), initialNotes));
+  const dirty = editable && snapshot(hours, notes) !== saved;
+
+  // Warn before leaving the page with hours that haven't been saved.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  const total = round(hours.reduce((a, h) => a + (Number(h) || 0), 0));
+  const required = dates.filter((d) => !isWeekend(d) && employed(d));
+  const missing = dates.filter((d, i) => !isWeekend(d) && employed(d) && hours[i].trim() === "").length;
+
+  const setDay = (i: number, v: string) => setHours((h) => h.map((x, j) => (j === i ? v : x)));
+  const fillWeekdays = (v: string) => setHours((h) => h.map((x, i) => (!isWeekend(dates[i]) && employed(dates[i]) ? v : x)));
 
   async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const list = Array.from(e.target.files ?? []);
@@ -67,71 +86,148 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
 
   function save(submit: boolean) {
     setMsg(null);
+    if (submit) {
+      // Explain exactly what's missing instead of silently doing nothing.
+      const problems: string[] = [];
+      if (!canSubmit) problems.push(`This week can be submitted from ${submitFromLabel}. You can save a draft now.`);
+      if (missing > 0) problems.push(`Fill in ${missing} empty weekday${missing === 1 ? "" : "s"} (enter 0 for holidays or days off).`);
+      if (!files.length) problems.push("Upload your approved timesheet (screenshot or PDF from your client or vendor portal) in step 2.");
+      if (problems.length) {
+        setMsg({ text: problems.join(" ") });
+        setTimeout(() => document.getElementById("ts-msg")?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+        return;
+      }
+    }
     start(async () => {
       const r = await saveTimesheet(week, hours.map((h) => (h.trim() === "" ? null : Number(h))), notes, submit);
       if (r.error) setMsg({ text: r.error });
       else {
-        setMsg({ ok: true, text: r.message ?? "Saved." });
+        setSaved(snapshot(hours, notes));
+        setMsg({ ok: true, text: submit ? (r.message ?? "Submitted.") : "Draft saved. Your hours are kept, so you can come back and finish this week later." });
         router.refresh();
       }
     });
   }
 
   return (
-    <div className="i9-stack" style={{ gap: 24 }}>
-      <div className="form-card">
-        <h2 className="i9-h3">Hours worked</h2>
-        <p className="muted i9-small">Fill in every weekday. Enter 0 for holidays, PTO or days you didn&apos;t work. Weekends are optional.</p>
-        <div className="i9-hours">
-          {dates.map((d, i) => (
-            <label key={d} className="field">
-              <span className="i9-day">{dayName(d)}<span className="muted">{shortDate(d)}</span></span>
-              <input
-                type="number" inputMode="decimal" min={0} max={24} step={0.25} value={hours[i]} disabled={!editable || !employed(d)}
-                onChange={(e) => setHours((h) => h.map((x, j) => (j === i ? e.target.value : x)))}
-                placeholder={isWeekend(d) ? "–" : "Hours"}
-                className={!isWeekend(d) && employed(d) && hours[i].trim() === "" ? "i9-need" : ""}
-              />
-            </label>
-          ))}
+    <div className="ts-form">
+      {/* Step 1: hours */}
+      <section className="ts-step">
+        <div className="ts-step-head">
+          <span className="ts-num">1</span>
+          <div>
+            <h2 className="i9-h3">Hours worked</h2>
+            <p className="muted i9-small">Every weekday is required. Enter 0 for holidays, PTO or days off. Weekends are optional.</p>
+          </div>
         </div>
-        <p><strong>Total: {Math.round(total * 100) / 100} hours</strong>{total > 40 && <span className="muted"> ({Math.round((total - 40) * 100) / 100} overtime)</span>}</p>
-        <label className="field">
-          Notes for HR (optional)
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!editable} rows={2} style={{ minHeight: 70 }} placeholder="e.g. Thanksgiving holiday on Thursday, or anything HR should know" />
-        </label>
-      </div>
 
-      <div className="form-card">
-        <h2 className="i9-h3">Client-approved timesheet</h2>
-        <p className="muted i9-small">
-          <strong>Required.</strong> Upload a screenshot or PDF of this period&apos;s timesheet from your client or vendor portal. It must show
-          that it&apos;s <strong>approved</strong> (the Approved status or approver) and the hours per day. HR approves your timesheet only after
-          checking this file.
-        </p>
+        {editable && required.length > 0 && (
+          <div className="ts-quick">
+            <button type="button" className="ts-chip" onClick={() => fillWeekdays("8")}>8 h every weekday</button>
+            <button type="button" className="ts-chip" onClick={() => fillWeekdays("0")}>0 every weekday</button>
+            <button type="button" className="ts-chip" onClick={() => setHours(dates.map(() => ""))}>Clear</button>
+          </div>
+        )}
+
+        <div className="ts-days">
+          {dates.map((d, i) => {
+            const weekend = isWeekend(d);
+            const can = employed(d);
+            const needed = !weekend && can && hours[i].trim() === "";
+            return (
+              <label key={d} className={`ts-day ${weekend ? "weekend" : ""} ${needed ? "need" : ""} ${!can ? "off" : ""}`}>
+                <span className="ts-day-name">
+                  <strong>{dayName(d)}</strong>
+                  <span>{shortDate(d)}</span>
+                </span>
+                <span className="ts-day-tag">{!can ? "Not employed" : weekend ? "Optional" : needed ? "Required" : ""}</span>
+                <span className="ts-day-input">
+                  <input
+                    type="number" inputMode="decimal" min={0} max={24} step={0.25}
+                    value={hours[i]} disabled={!editable || !can}
+                    onChange={(e) => setDay(i, e.target.value)}
+                    placeholder="–"
+                    aria-label={`Hours on ${dayName(d)} ${shortDate(d)}`}
+                  />
+                  <span className="ts-unit">h</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+
+        <div className="ts-total">
+          <span>Total</span>
+          <strong>{total} h</strong>
+          {total > 40 && <span className="muted i9-small">({round(total - 40)} h overtime this week)</span>}
+          {editable && missing > 0 && <span className="ts-missing">{missing} weekday{missing === 1 ? "" : "s"} still empty</span>}
+        </div>
+      </section>
+
+      {/* Step 2: approved timesheet */}
+      <section className="ts-step">
+        <div className="ts-step-head">
+          <span className="ts-num">2</span>
+          <div>
+            <h2 className="i9-h3">Approved timesheet</h2>
+            <p className="muted i9-small">
+              A screenshot or PDF from your client or vendor portal showing it&apos;s <strong>approved</strong> and the hours per day. Required.
+            </p>
+          </div>
+        </div>
         {files.map((f) => (
-          <div key={f.id} className="i9-upload done">
-            <div>{f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a> : f.name}</div>
-            {editable && <button type="button" className="btn btn-outline" onClick={() => remove(f.id)}>Remove</button>}
+          <div key={f.id} className="ts-file">
+            <span className="ts-file-icon" aria-hidden="true">✓</span>
+            <span className="ts-file-name">{f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a> : f.name}</span>
+            {editable && <button type="button" className="ts-file-remove" onClick={() => remove(f.id)}>Remove</button>}
           </div>
         ))}
         {editable && (
-          <label className="btn btn-outline" style={{ alignSelf: "flex-start" }}>
-            {busy ? "Uploading…" : files.length ? "Add another file" : "Upload approved timesheet"}
+          <label className={`ts-drop ${busy ? "busy" : ""}`}>
             <input type="file" accept="image/*,application/pdf" multiple onChange={upload} disabled={busy} hidden />
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 16V4" /><path d="M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+            </svg>
+            <strong>{busy ? "Uploading…" : files.length ? "Add another file" : "Upload approved timesheet"}</strong>
+            <span className="muted i9-small">PDF, JPG or PNG · up to 10 MB</span>
           </label>
         )}
-      </div>
+        {!editable && !files.length && <p className="muted">No file uploaded.</p>}
+      </section>
 
-      {msg && <p className={`form-status ${msg.ok ? "ok" : "err"}`} role="status">{msg.text}</p>}
-      {editable && (
-        <div className="btn-row">
-          <button type="button" className="btn btn-primary" disabled={pending || busy || !canSubmit} onClick={() => save(true)} title={canSubmit ? undefined : "You can submit on the last weekday of this period"}>
-            {pending ? "Submitting…" : "Submit to HR"}
-          </button>
-          <button type="button" className="btn btn-outline" disabled={pending || busy} onClick={() => save(false)}>Save draft</button>
+      {/* Step 3: notes & submit */}
+      <section className="ts-step">
+        <div className="ts-step-head">
+          <span className="ts-num">3</span>
+          <div>
+            <h2 className="i9-h3">{editable ? "Notes & submit" : "Notes"}</h2>
+            <p className="muted i9-small">Optional. Anything HR should know, e.g. a holiday or a correction.</p>
+          </div>
         </div>
-      )}
+        <label className="field">
+          <span className="sr-only">Notes for HR</span>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!editable} rows={3} style={{ minHeight: 90 }} placeholder="e.g. Thanksgiving holiday on Thursday" />
+        </label>
+
+        {msg && <p id="ts-msg" className={`form-status ${msg.ok ? "ok" : "err"}`} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+        {editable && (
+          <>
+            <ul className="ts-check">
+              <li className={missing === 0 ? "ok" : ""}>Every weekday filled in</li>
+              <li className={files.length ? "ok" : ""}>Approved timesheet uploaded</li>
+            </ul>
+            <div className="btn-row">
+              <button type="button" className="btn btn-primary" disabled={pending || busy} onClick={() => save(true)}>
+                {pending ? "Submitting…" : "Submit to HR"}
+              </button>
+              <button type="button" className="btn btn-outline" disabled={pending || busy} onClick={() => save(false)}>Save draft</button>
+              {dirty && <span className="ts-dirty">● Unsaved changes</span>}
+            </div>
+            <p className="muted i9-small">Not finished? <strong>Save draft</strong> keeps the hours you&apos;ve entered so far. Submit when the week is complete.</p>
+            {!canSubmit && <p className="muted i9-small">This week can be submitted from {submitFromLabel}.</p>}
+          </>
+        )}
+      </section>
     </div>
   );
 }

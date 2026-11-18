@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import PasswordInput from "@/components/PasswordInput";
 import { completePasswordReset, requestPasswordReset, setPassword, signIn, type FormState, type ResetState } from "./actions";
 
 export function SignInForm() {
@@ -8,7 +9,7 @@ export function SignInForm() {
   return (
     <form action={action} className="form-card">
       <label className="field">Email<input name="email" type="email" autoComplete="username" required /></label>
-      <label className="field">Password<input name="password" type="password" autoComplete="current-password" required /></label>
+      <label className="field">Password<PasswordInput name="password" autoComplete="current-password" required /></label>
       {s.error && <p className="form-status err" role="alert">{s.error}</p>}
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Signing in…" : "Sign in"}
@@ -22,8 +23,8 @@ export function SetPasswordForm() {
   const [s, action, pending] = useActionState(setPassword, {} as FormState);
   return (
     <form action={action} className="form-card">
-      <label className="field">New password<input name="password" type="password" autoComplete="new-password" required minLength={10} /></label>
-      <label className="field">Confirm new password<input name="confirm" type="password" autoComplete="new-password" required /></label>
+      <label className="field">New password<PasswordInput name="password" autoComplete="new-password" required minLength={10} /></label>
+      <label className="field">Confirm new password<PasswordInput name="confirm" autoComplete="new-password" required /></label>
       <p className="muted i9-small">At least 10 characters, with letters and a number.</p>
       {s.error && <p className="form-status err" role="alert">{s.error}</p>}
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>
@@ -43,8 +44,8 @@ export function ForgotPasswordForm() {
         {sent.message && <p className="form-status ok">{sent.message}</p>}
         <input type="hidden" name="email" value={sent.email} />
         <label className="field">6-digit code<input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={7} required autoFocus /></label>
-        <label className="field">New password<input name="password" type="password" autoComplete="new-password" required minLength={10} /></label>
-        <label className="field">Confirm new password<input name="confirm" type="password" autoComplete="new-password" required /></label>
+        <label className="field">New password<PasswordInput name="password" autoComplete="new-password" required minLength={10} /></label>
+        <label className="field">Confirm new password<PasswordInput name="confirm" autoComplete="new-password" required /></label>
         <p className="muted i9-small">At least 10 characters, with letters and a number.</p>
         {done.error && <p className="form-status err" role="alert">{done.error}</p>}
         <button className="btn btn-primary" disabled={resetting} style={{ alignSelf: "flex-start" }}>{resetting ? "Saving…" : "Reset password"}</button>
