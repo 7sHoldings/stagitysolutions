@@ -4,7 +4,16 @@ import { useActionState } from "react";
 import { deletePerson, registerPerson, resetPassword, startI9, updatePerson } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
-import { ConfirmAction } from "../Modal";
+import { ConfirmAction, ModalButton } from "../Modal";
+
+/** "+ Register a person" button that opens the form in a pop-up. */
+export function RegisterButton() {
+  return (
+    <ModalButton label={<><span aria-hidden="true">＋</span> Register a person</>} title="Register a person" wide>
+      {(close) => <RegisterForm close={close} />}
+    </ModalButton>
+  );
+}
 
 type P = Partial<{
   id: string; first_name: string; last_name: string; email: string; phone: string | null; kind: string;

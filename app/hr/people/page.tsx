@@ -2,9 +2,9 @@ import Link from "next/link";
 import { db, requireHr } from "@/lib/i9/server";
 import { money } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
-import { ConfirmAction, ModalButton } from "../Modal";
+import { ConfirmAction } from "../Modal";
 import { deletePerson } from "./actions";
-import { RegisterForm } from "./forms";
+import { RegisterButton } from "./forms";
 
 export default async function People() {
   const hr = await requireHr();
@@ -20,9 +20,7 @@ export default async function People() {
           <h1 className="h2">People</h1>
           <p className="muted">Register consultants and employees; they get a login by email. Pay and bill rates are set on the Vendors page.</p>
         </div>
-        <ModalButton label={<><span aria-hidden="true">＋</span> Register a person</>} title="Register a person" wide>
-          {(close) => <RegisterForm close={close} />}
-        </ModalButton>
+        <RegisterButton />
       </div>
 
       {people?.length ? (
