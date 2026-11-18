@@ -114,7 +114,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             );
           })}
           <p className="muted i9-small">
-            Weeks run Sunday to Saturday. Weeks that cross into a new month are split, so each month can be finished on its own.
+            Weeks run Sunday to Saturday. Weeks that cross into a new month are split, so each month can be finished on its own.{" "}
+            <Link href="/portal/help">How to submit your timesheet →</Link>
           </p>
         </>
       )}

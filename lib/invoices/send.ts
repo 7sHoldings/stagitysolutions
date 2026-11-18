@@ -118,14 +118,16 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   const cc = (vendor.cc_emails ?? "").split(",").map((e) => e.trim()).filter(Boolean);
   const ok = await send(
     vendor.ap_email.split(/,\s*/).filter(Boolean).join(", "),
-    `Invoice ${number}: ${consultant}, ${periodLabel(inv.period_start, inv.period_end)}`,
+    // e.g. "Krutarth Panchal invoice for September 2026 (#20261001)"
+    `${consultant} invoice for ${periodLabel(inv.period_start, inv.period_end)} (#${number})`,
     [
       "Hello,",
-      `Please find attached invoice ${number} for ${consultant}'s services for ${periodLabel(inv.period_start, inv.period_end)} (${mdY(inv.period_start)} to ${mdY(inv.period_end)}).`,
+      `This email is regarding the ${consultant} invoice. Please find attached invoice #${number} for ${periodLabel(inv.period_start, inv.period_end)} (${mdY(inv.period_start)} to ${mdY(inv.period_end)}).`,
       `Total: ${money(Number(inv.total))} (${Number(inv.regular_hours) + Number(inv.overtime_hours)} hours × ${money(Number(inv.bill_rate))}).${inv.po_number ? ` PO/reference: ${inv.po_number}.` : ""}`,
       ...(vendor.attach_timesheets ? ["The client-approved timesheets for this period are attached."] : []),
+      "Please acknowledge once received.",
       `If you have any questions, please reach out to ${company.invoiceQuestionsEmail} or ${company.phone}.`,
-      "Thank you.",
+      "Thanks & Regards,",
     ],
     undefined,
     { cc, bcc: [company.accountsEmail], attachments, from: "accounts", replyTo: company.invoiceQuestionsEmail },
