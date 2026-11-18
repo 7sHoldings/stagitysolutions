@@ -74,12 +74,3 @@ export async function refreshDrafts(): Promise<void> {
   await audit(null, `hr:${hr}`, "invoice_drafts_refreshed");
   refresh();
 }
-
-export async function saveInvoiceSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const hr = await requireHr();
-  const value = clip(formData.get("paymentInstructions"), 1500);
-  await db().from("stagity_settings").upsert({ key: "invoice_payment_instructions", value, updated_at: new Date().toISOString(), updated_by: hr });
-  await audit(null, `hr:${hr}`, "invoice_settings_updated");
-  refresh();
-  return { ok: true, message: "Saved." };
-}

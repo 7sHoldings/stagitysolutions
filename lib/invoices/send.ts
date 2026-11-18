@@ -5,7 +5,7 @@ import { TS_BUCKET } from "@/lib/portal/server";
 import { addDays, money, monthLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import { company } from "@/lib/content";
 import { buildInvoicePdf, type InvoicePdfData } from "./pdf";
-import { getSetting, recomputeDraft, type Invoice, type Vendor } from "./server";
+import { recomputeDraft, type Invoice, type Vendor } from "./server";
 
 const mdY = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(0, 4)}`;
 
@@ -28,22 +28,16 @@ export async function pdfData({ inv, vendor, person }: Loaded): Promise<InvoiceP
   return {
     number: inv.number.startsWith("DRAFT-") ? "Assigned on send" : inv.number,
     issueDate: issue,
-    dueDate: inv.due_date ?? addDays(issue, vendor.payment_terms_days),
-    termsDays: vendor.payment_terms_days,
     periodLabel: periodLabel(inv.period_start, inv.period_end),
-    amountPaid: inv.status === "paid" ? Number(inv.total) : 0,
     vendor: { name: vendor.name, address: vendor.address, apEmail: vendor.ap_email },
     consultant: `${person.first_name} ${person.last_name}`,
     client: person.client_name,
     periodStart: inv.period_start,
     periodEnd: inv.period_end,
     poNumber: inv.po_number,
-    regularHours: Number(inv.regular_hours),
-    overtimeHours: Number(inv.overtime_hours),
+    hours: Number(inv.regular_hours) + Number(inv.overtime_hours),
     billRate: Number(inv.bill_rate),
-    billOtRate: Number(inv.bill_ot_rate),
     total: Number(inv.total),
-    paymentInstructions: await getSetting("invoice_payment_instructions"),
     notes: inv.notes,
     draft: inv.status === "draft",
   };
@@ -114,7 +108,7 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
     [
       "Hello,",
       `Please find attached invoice ${number} for ${consultant}'s services${person.client_name ? ` at ${person.client_name}` : ""} for ${periodLabel(inv.period_start, inv.period_end)} (${mdY(inv.period_start)} to ${mdY(inv.period_end)}).`,
-      `Amount due: ${money(Number(inv.total))}, due by ${mdY(due)}.${inv.po_number ? ` PO/reference: ${inv.po_number}.` : ""}`,
+      `Total: ${money(Number(inv.total))} (${Number(inv.regular_hours) + Number(inv.overtime_hours)} hours × ${money(Number(inv.bill_rate))}).${inv.po_number ? ` PO/reference: ${inv.po_number}.` : ""}`,
       ...(vendor.attach_timesheets ? ["The client-approved timesheets for this period are attached."] : []),
       `Please reply to this email or contact ${company.email} with any questions.`,
       "Thank you.",

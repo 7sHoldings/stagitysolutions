@@ -17,8 +17,9 @@ export type Invoice = {
 
 export const isDraftNumber = (n: string) => n.startsWith("DRAFT-");
 
-export function invoiceTotal(i: { regular_hours: number; overtime_hours: number; bill_rate: number; bill_ot_rate: number }) {
-  return round2(Number(i.regular_hours) * Number(i.bill_rate) + Number(i.overtime_hours) * Number(i.bill_ot_rate));
+/** Vendor invoices bill every hour worked (regular + overtime) at the consultant's bill rate. */
+export function invoiceTotal(i: { regular_hours: number; overtime_hours: number; bill_rate: number }) {
+  return round2((Number(i.regular_hours) + Number(i.overtime_hours)) * Number(i.bill_rate));
 }
 
 export async function getSetting(key: string): Promise<string> {
@@ -28,16 +29,16 @@ export async function getSetting(key: string): Promise<string> {
 
 /** Recalculates a draft's hours and totals from its attached timesheet days. Deletes empty drafts. */
 export async function recomputeDraft(invoiceId: string) {
-  const { data: inv } = await db().from("stagity_invoices").select("*, stagity_people(bill_rate, bill_ot_rate, po_number)").eq("id", invoiceId).single();
+  const { data: inv } = await db().from("stagity_invoices").select("*, stagity_people(bill_rate, po_number)").eq("id", invoiceId).single();
   if (!inv || inv.status !== "draft") return;
   const { data: days } = await db().from("stagity_timesheet_days").select("regular_hours, overtime_hours").eq("invoice_id", invoiceId);
   if (!days?.length) {
     await db().from("stagity_invoices").delete().eq("id", invoiceId);
     return;
   }
-  const p = inv.stagity_people as { bill_rate: number | null; bill_ot_rate: number | null; po_number: string | null };
+  const p = inv.stagity_people as { bill_rate: number | null; po_number: string | null };
   const rate = Number(p.bill_rate ?? 0);
-  const otRate = p.bill_ot_rate != null ? Number(p.bill_ot_rate) : rate;
+  const otRate = rate; // overtime hours are billed at the same rate
   const regular = round2(days.reduce((a, d) => a + Number(d.regular_hours), 0));
   const overtime = round2(days.reduce((a, d) => a + Number(d.overtime_hours), 0));
   await db()
@@ -47,7 +48,7 @@ export async function recomputeDraft(invoiceId: string) {
       overtime_hours: overtime,
       bill_rate: rate,
       bill_ot_rate: otRate,
-      total: invoiceTotal({ regular_hours: regular, overtime_hours: overtime, bill_rate: rate, bill_ot_rate: otRate }),
+      total: invoiceTotal({ regular_hours: regular, overtime_hours: overtime, bill_rate: rate }),
       po_number: inv.po_number ?? p.po_number,
     })
     .eq("id", invoiceId);

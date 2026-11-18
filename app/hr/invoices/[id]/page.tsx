@@ -50,10 +50,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <dl className="i9-dl">
           <div className="i9-row"><dt>Bill to</dt><dd>{vendor.name} · {vendor.ap_email}{vendor.cc_emails ? ` (cc ${vendor.cc_emails})` : ""}</dd></div>
           <div className="i9-row"><dt>Client</dt><dd>{person.client_name ?? "—"}</dd></div>
-          <div className="i9-row"><dt>Regular hours</dt><dd>{Number(inv.regular_hours)} × {money(Number(inv.bill_rate))}</dd></div>
-          {Number(inv.overtime_hours) > 0 && <div className="i9-row"><dt>Overtime hours</dt><dd>{Number(inv.overtime_hours)} × {money(Number(inv.bill_ot_rate))}</dd></div>}
+          <div className="i9-row"><dt>Hours × rate</dt><dd>{Number(inv.regular_hours) + Number(inv.overtime_hours)} × {money(Number(inv.bill_rate))}</dd></div>
           <div className="i9-row"><dt>Total</dt><dd><strong>{money(Number(inv.total))}</strong></dd></div>
-          <div className="i9-row"><dt>Terms</dt><dd>{vendor.payment_terms_days === 0 ? "Due on receipt" : `Net ${vendor.payment_terms_days}`}{inv.due_date ? ` · due ${inv.due_date}` : ""}</dd></div>
+          {inv.due_date && <div className="i9-row"><dt>Expected payment by</dt><dd>{inv.due_date} (internal, not on the invoice)</dd></div>}
           {inv.sent_at && <div className="i9-row"><dt>Sent</dt><dd>{new Date(inv.sent_at).toLocaleString("en-US", { timeZone: "America/Chicago" })} CT to {inv.sent_to} by {inv.sent_by}</dd></div>}
           {inv.paid_at && <div className="i9-row"><dt>Paid</dt><dd>{inv.paid_at}</dd></div>}
           {inv.voided_reason && <div className="i9-row"><dt>Voided</dt><dd>{inv.voided_reason}</dd></div>}

@@ -4,13 +4,11 @@ import path from "node:path";
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { company } from "@/lib/content";
 
-// Stagity vendor invoice: brand header, amount due up front, details strip, line items, totals, how to pay.
+// Stagity vendor invoice: brand header, bill-to/from, total, details strip, one line (hours × rate), total.
 
 export type InvoicePdfData = {
   number: string;
   issueDate: string; // yyyy-mm-dd
-  dueDate: string;
-  termsDays: number;
   periodLabel: string; // e.g. "September 2026"
   vendor: { name: string; address: string | null; apEmail: string };
   consultant: string;
@@ -18,13 +16,9 @@ export type InvoicePdfData = {
   periodStart: string;
   periodEnd: string;
   poNumber: string | null;
-  regularHours: number;
-  overtimeHours: number;
+  hours: number; // all hours worked in the period
   billRate: number;
-  billOtRate: number;
-  total: number;
-  amountPaid?: number;
-  paymentInstructions: string;
+  total: number; // hours × billRate
   notes: string | null;
   draft?: boolean;
 };
@@ -32,7 +26,6 @@ export type InvoicePdfData = {
 const ink = rgb(0.043, 0.071, 0.125); // #0b1220
 const body = rgb(0.23, 0.27, 0.34);
 const muted = rgb(0.36, 0.4, 0.47);
-const blue = rgb(0.07, 0.35, 0.84); // #1259d6
 const sky = rgb(0.16, 0.66, 0.88); // logo blue
 const orange = rgb(0.94, 0.49, 0.06); // #f07c10
 const line = rgb(0.88, 0.9, 0.93);
@@ -73,8 +66,6 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
   const L = 48;
   const R = 564;
   const W = R - L;
-  const paid = d.amountPaid ?? 0;
-  const due = Math.round((d.total - paid) * 100) / 100;
 
   // Draft watermark (drawn first so it sits behind everything)
   if (d.draft) page.drawText("DRAFT", { x: 150, y: 260, size: 130, font: bold, color: rgb(0.93, 0.94, 0.96), rotate: degrees(30) });
@@ -106,30 +97,30 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
   [company.legalName, company.addressLine1, company.addressLine2, company.phone, company.email]
     .forEach((t, i) => page.drawText(t, { x: L + 200, y: y - 16 - i * 14, size: 10, font: i ? font : bold, color: i ? body : ink }));
 
-  // Amount due card
+  // Total card
   const cardX = 404;
-  page.drawRectangle({ x: cardX, y: y - 76, width: R - cardX, height: 88, color: ink });
-  page.drawRectangle({ x: cardX, y: y - 76, width: 4, height: 88, color: orange });
-  page.drawText(paid > 0 && due <= 0 ? "PAID IN FULL" : "AMOUNT DUE", { x: cardX + 18, y: y - 8, size: 8, font: bold, color: rgb(0.68, 0.72, 0.78) });
-  page.drawText(usd(due), { x: cardX + 18, y: y - 38, size: 22, font: bold, color: white });
-  page.drawText(d.termsDays === 0 ? "Due on receipt" : `Due ${mdY(d.dueDate)}`, { x: cardX + 18, y: y - 60, size: 10, font, color: rgb(0.85, 0.88, 0.92) });
+  page.drawRectangle({ x: cardX, y: y - 62, width: R - cardX, height: 74, color: ink });
+  page.drawRectangle({ x: cardX, y: y - 62, width: 4, height: 74, color: orange });
+  page.drawText("TOTAL", { x: cardX + 18, y: y - 8, size: 8, font: bold, color: rgb(0.68, 0.72, 0.78) });
+  page.drawText(usd(d.total), { x: cardX + 18, y: y - 40, size: 22, font: bold, color: white });
 
   // Details strip
   y = 532;
   const details: [string, string][] = [
     ["Invoice date", mdY(d.issueDate)],
     ["Service period", d.periodLabel],
-    ["Terms", d.termsDays === 0 ? "Due on receipt" : `Net ${d.termsDays}`],
-    [d.poNumber ? "PO / reference" : "Consultant", d.poNumber || d.consultant],
+    ["Consultant", d.consultant],
+    ...(d.poNumber ? ([["PO / reference", d.poNumber]] as [string, string][]) : []),
   ];
+  const colW = W / 4;
   page.drawRectangle({ x: L, y: y - 40, width: W, height: 52, color: panel });
   details.forEach(([k, v], i) => {
-    const x = L + 16 + i * (W / 4);
+    const x = L + 16 + i * colW;
     label(k, x, y - 6);
-    page.drawText(wrap(v, bold, 10.5, W / 4 - 22)[0], { x, y: y - 24, size: 10.5, font: bold, color: ink });
+    page.drawText(wrap(v, bold, 10.5, colW - 22)[0], { x, y: y - 24, size: 10.5, font: bold, color: ink });
   });
 
-  // Line items
+  // One line: total hours × bill rate
   y = 452;
   const c = { desc: L, hours: 382, rate: 466, amount: R };
   label("Description", c.desc, y);
@@ -137,62 +128,25 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
   right(page, "RATE", c.rate, y, bold, 8, muted);
   right(page, "AMOUNT", c.amount, y, bold, 8, muted);
   page.drawLine({ start: { x: L, y: y - 9 }, end: { x: R, y: y - 9 }, thickness: 1.5, color: ink });
-  const service = d.client ? `Consulting services at ${d.client}` : "Consulting services";
-  const rows: [string, string, number, number][] = [[`${d.consultant}: regular hours`, `${service} · ${d.periodLabel}`, d.regularHours, d.billRate]];
-  if (d.overtimeHours > 0) rows.push([`${d.consultant}: overtime hours`, `Hours over 40 in a workweek · ${d.periodLabel}`, d.overtimeHours, d.billOtRate]);
   y -= 32;
-  for (const [title, sub, hours, rate] of rows) {
-    page.drawText(title, { x: c.desc, y, size: 10.5, font: bold, color: ink });
-    page.drawText(wrap(sub, font, 9, 300)[0], { x: c.desc, y: y - 14, size: 9, font, color: muted });
-    right(page, hours.toFixed(2), c.hours, y, font, 10.5, body);
-    right(page, usd(rate), c.rate, y, font, 10.5, body);
-    right(page, usd(Math.round(hours * rate * 100) / 100), c.amount, y, bold, 10.5);
-    page.drawLine({ start: { x: L, y: y - 26 }, end: { x: R, y: y - 26 }, thickness: 0.75, color: line });
-    y -= 46;
-  }
+  page.drawText(`${d.consultant}: consulting services`, { x: c.desc, y, size: 10.5, font: bold, color: ink });
+  page.drawText(wrap(`${d.client ? `${d.client} · ` : ""}${d.periodLabel}`, font, 9, 300)[0], { x: c.desc, y: y - 14, size: 9, font, color: muted });
+  right(page, d.hours.toFixed(2), c.hours, y, font, 10.5, body);
+  right(page, usd(d.billRate), c.rate, y, font, 10.5, body);
+  right(page, usd(d.total), c.amount, y, bold, 10.5);
+  page.drawLine({ start: { x: L, y: y - 26 }, end: { x: R, y: y - 26 }, thickness: 0.75, color: line });
 
-  // Totals
-  y -= 2;
-  const tl = 372;
-  const totals: [string, string][] = [
-    ["Total hours", (d.regularHours + d.overtimeHours).toFixed(2)],
-    ["Subtotal", usd(d.total)],
-    ["Amount paid", paid ? `-${usd(paid)}` : usd(0)],
-  ];
-  for (const [k, v] of totals) {
-    page.drawText(k, { x: tl, y, size: 10, font, color: muted });
-    right(page, v, R, y, font, 10, body);
-    y -= 20;
-  }
-  y -= 14;
-  page.drawRectangle({ x: tl - 12, y: y - 12, width: R - tl + 12, height: 32, color: blue });
-  page.drawText("Balance due", { x: tl, y: y - 1, size: 11, font: bold, color: white });
-  right(page, usd(due), R - 12, y - 1, bold, 13, white);
+  // Total
+  y -= 56;
+  page.drawText("Total", { x: 372, y, size: 12, font: bold, color: ink });
+  right(page, usd(d.total), R, y, bold, 14);
 
-  // How to pay / Questions
-  y = 214;
-  page.drawLine({ start: { x: L, y: y + 16 }, end: { x: R, y: y + 16 }, thickness: 0.75, color: line });
-  label("How to pay", L, y, blue);
-  label("Questions?", 404, y, blue);
-  let py = y - 16;
-  const instr = d.paymentInstructions || "Please contact us for payment details.";
-  for (const t of wrap(instr, font, 9.5, 330).slice(0, 7)) {
-    page.drawText(t, { x: L, y: py, size: 9.5, font, color: body });
-    py -= 13.5;
-  }
-  if (!d.draft) page.drawText(`Please include invoice no. ${d.number} with your payment.`, { x: L, y: py - 4, size: 9.5, font: bold, color: ink });
-  ["Contact our accounts team:", company.email, company.phone].forEach((t, i) =>
-    page.drawText(t, { x: 404, y: y - 16 - i * 13.5, size: 9.5, font: i ? bold : font, color: i ? ink : body }),
-  );
   if (d.notes) {
-    label("Notes", L, py - 32);
-    wrap(d.notes, font, 9.5, W).slice(0, 3).forEach((t, i) => page.drawText(t, { x: L, y: py - 48 - i * 13.5, size: 9.5, font, color: body }));
+    y -= 50;
+    label("Notes", L, y);
+    wrap(d.notes, font, 9.5, W).slice(0, 3).forEach((t, i) => page.drawText(t, { x: L, y: y - 16 - i * 13.5, size: 9.5, font, color: body }));
   }
 
-  // Footer
-  page.drawText("Thank you for your business.", { x: L, y: 48, size: 10, font: bold, color: ink });
-  right(page, `${company.legalName} · ${company.url.replace("https://", "")}`, R, 48, font, 9, muted);
   page.drawRectangle({ x: 0, y: 0, width: 612, height: 6, color: ink });
-
   return doc.save();
 }

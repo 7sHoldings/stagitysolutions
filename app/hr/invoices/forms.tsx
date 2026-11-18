@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { markPaid, saveInvoiceSettings, sendInvoice, updateDraft, voidInvoice } from "./actions";
+import { markPaid, sendInvoice, updateDraft, voidInvoice } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 
@@ -57,21 +57,6 @@ export function VoidForm({ id }: { id: string }) {
       <label className="field">Reason<input name="reason" placeholder="e.g. wrong hours, will reissue" /></label>
       <Status s={s} />
       <button className="btn btn-outline" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Voiding…" : "Void invoice"}</button>
-    </form>
-  );
-}
-
-export function InvoiceSettingsForm({ paymentInstructions }: { paymentInstructions: string }) {
-  const [s, action, pending] = useActionState(saveInvoiceSettings, {} as ActionState);
-  return (
-    <form action={action} className="i9-stack">
-      <label className="field">
-        Payment instructions (printed on every invoice)
-        <textarea name="paymentInstructions" defaultValue={paymentInstructions} rows={4} style={{ minHeight: 110 }}
-          placeholder={"Pay by ACH to: Stagity Solutions LLC\nBank: …  Routing: …  Account: …\nOr mail checks to 4101 McEwen Rd, Suite 517, Dallas, TX 75244"} />
-      </label>
-      <Status s={s} />
-      <button className="btn btn-outline" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Save"}</button>
     </form>
   );
 }

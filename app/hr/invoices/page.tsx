@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { db, requireHr } from "@/lib/i9/server";
-import { getSetting, periodCompleteness } from "@/lib/invoices/server";
+import { periodCompleteness } from "@/lib/invoices/server";
 import { money, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
 import { refreshDrafts } from "./actions";
-import { InvoiceSettingsForm, SendButton } from "./forms";
+import { SendButton } from "./forms";
 
 type Row = {
   id: string; number: string; status: string; period_start: string; period_end: string; total: number; regular_hours: number;
@@ -42,7 +42,6 @@ export default async function Invoices() {
     const p = d.stagity_people as unknown as { first_name: string; last_name: string; vendor_id: string | null; bill_rate: number | null };
     if (!p.vendor_id || p.bill_rate == null) missingSetup.set(d.person_id, `${p.first_name} ${p.last_name}`);
   }
-  const instructions = await getSetting("invoice_payment_instructions");
   const name = (r: Row) => `${r.stagity_people.first_name} ${r.stagity_people.last_name}`;
 
   return (
@@ -56,7 +55,6 @@ export default async function Invoices() {
         <form action={refreshDrafts}><button className="btn btn-outline">Refresh drafts</button></form>
       </div>
 
-      {!instructions && <p className="form-status err">Add your payment instructions (bank/ACH or check details) at the bottom of this page before sending invoices.</p>}
       {missingSetup.size > 0 && (
         <p className="form-status err">
           Approved hours not invoiced. Set the vendor and bill rate for: {[...missingSetup].map(([id, n], i) => <span key={id}>{i ? ", " : ""}<Link href={`/hr/people/${id}`}>{n}</Link></span>)}.
@@ -134,11 +132,7 @@ export default async function Invoices() {
         </details>
       )}
 
-      <div className="form-card">
-        <h2 className="i9-h3">Invoice settings</h2>
-        <InvoiceSettingsForm paymentInstructions={instructions} />
-        <p className="muted i9-small">Vendors (invoice email, terms, weekly or monthly billing) are on the <Link href="/hr/vendors">Vendors</Link> page. Bill rates are set on each consultant&apos;s profile.</p>
-      </div>
+      <p className="muted i9-small">Vendors (invoice email, weekly or monthly billing) are on the <Link href="/hr/vendors">Vendors</Link> page. Bill rates are set on each consultant&apos;s profile. Invoices bill all hours worked × the bill rate.</p>
     </section>
   );
 }

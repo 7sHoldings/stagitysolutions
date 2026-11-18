@@ -45,7 +45,6 @@ function Fields({ p, isNew, vendors }: { p: P; isNew: boolean; vendors: VendorOp
             </select>
           </label>
           <label className="field">Bill rate to vendor ($/h)<input name="billRate" type="number" step="0.01" min="0" defaultValue={p.bill_rate ?? ""} /></label>
-          <label className="field">Overtime bill rate ($/h, optional)<input name="billOtRate" type="number" step="0.01" min="0" defaultValue={p.bill_ot_rate ?? ""} placeholder="Same as bill rate" /></label>
           <label className="field">PO / reference number<input name="poNumber" defaultValue={p.po_number ?? ""} /></label>
         </div>
       )}

@@ -73,10 +73,9 @@ HR approves or sends back with a note. Overtime (over 40 h/week) is calculated a
 marked paid so they can't be paid twice) and downloads the CSV for **ADP RUN** import. ADP calculates taxes, deductions and net pay.
 
 **Vendor invoices.** Each consultant has a vendor (Vendors page: AP email, CC, address, payment terms, weekly or monthly billing)
-and a bill rate (optional overtime bill rate and PO number) on their profile. Approving a timesheet adds its hours to a draft invoice for that
+and a bill rate (and optional PO number) on their profile. Invoices show one line: all hours worked (regular + overtime) × bill rate = total. Approving a timesheet adds its hours to a draft invoice for that
 billing period. HR previews the PDF and clicks **Approve & send**: the invoice gets its number (year + month of the service period + running number, e.g. `20260901`), and it's emailed from the HR
 Gmail account to the vendor with the PDF and the approved timesheets attached (HR gets a bcc). Then mark it paid, or void and reissue it.
-Payment instructions printed on invoices are set at the bottom of the Invoices page.
 
 **Data:** `stagity_vendors`, `stagity_invoices`, `stagity_settings`, `stagity_people`, `stagity_timesheets`, `stagity_timesheet_days`, `stagity_timesheet_files`, `stagity_payroll_runs`,
 `stagity_payroll_items`, `stagity_reminder_log`, `stagity_i9_cases`, `stagity_i9_documents`, `stagity_i9_audit` (append-only),
