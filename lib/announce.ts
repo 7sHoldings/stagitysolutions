@@ -38,7 +38,7 @@ export function announcementBody(firstName: string, startMonth: string, ackBy: s
     "## Weekly timesheets",
     [
       "• Weeks run Sunday to Saturday.",
-      "• Enter hours for every weekday (Monday to Friday). Enter 0 for holidays, PTO or days you didn't work.",
+      "• Enter hours for every weekday (Monday to Friday). Enter 0 for holidays or days you didn't work.",
       "• Upload the client-approved timesheet for that week. It must show the Approved status and the hours per day. Unapproved timesheets will be returned.",
       "• Submit by the Tuesday after each week ends. You'll get a reminder on Tuesday, and again each day through Friday if it's still missing.",
     ].join("\n"),

@@ -123,7 +123,7 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
             <h2 className="i9-h3">Hours worked</h2>
             <p className="muted i9-small">
               {editable
-                ? "Enter hours for every weekday (Mon–Fri). Put 0 for holidays, PTO or days off. Weekends can't have hours."
+                ? "Enter hours for every weekday (Mon–Fri). Put 0 for holidays or days you didn't work. Weekends can't have hours."
                 : "Submitted hours are locked. If something is wrong, contact HR; they can send it back for you to fix."}
             </p>
           </div>

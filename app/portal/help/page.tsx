@@ -29,7 +29,7 @@ export default async function PortalHelp() {
         <ol className="help-steps">
           <li>On your <Link href="/portal">Timesheets</Link> page, the <strong>To submit</strong> box lists the weeks waiting for you. Click <strong>Fill timesheet</strong>.</li>
           <li>
-            <strong>Hours:</strong> enter hours for every weekday (Monday–Friday). Put <strong>0</strong> for holidays, PTO or days you didn&apos;t work.
+            <strong>Hours:</strong> enter hours for every weekday (Monday–Friday). Put <strong>0</strong> for holidays or days you didn&apos;t work.
             Weekends are locked. Tip: <em>8 h every weekday</em> fills a standard week in one click.
           </li>
           <li>
@@ -102,8 +102,8 @@ export default async function PortalHelp() {
         <details className="help-q"><summary>My client hasn&apos;t approved my timesheet yet. What do I do?</summary>
           <p>Enter your hours and click <em>Save draft</em>. Once your client approves it, upload the approved screenshot and submit. Remember the monthly deadline of the 5th.</p>
         </details>
-        <details className="help-q"><summary>I was on vacation or it was a holiday.</summary>
-          <p>Enter <strong>0</strong> for those days and add a short note (e.g. &ldquo;PTO&rdquo;). Every weekday needs a number, even if it&apos;s 0.</p>
+        <details className="help-q"><summary>It was a holiday or I didn&apos;t work that day.</summary>
+          <p>Enter <strong>0</strong> for those days and add a short note (e.g. &ldquo;Thanksgiving holiday&rdquo;). Every weekday needs a number, even if it&apos;s 0.</p>
         </details>
         <details className="help-q"><summary>I worked on a weekend.</summary>
           <p>Weekends can&apos;t be entered in the portal. Email {company.timesheetsEmail} and HR will help.</p>
