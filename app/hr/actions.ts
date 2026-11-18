@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { audit, db, encryptJson, newEmployeeToken, requireHr, sha256, siteOrigin } from "@/lib/i9/server";
-import { sendEmployeeInvite } from "@/lib/i9/mail";
+import { audit, db, encryptJson, requireHr } from "@/lib/i9/server";
 import type { DocEntry, Section2 } from "@/lib/i9/forms";
 import { company } from "@/lib/content";
 
@@ -11,77 +10,6 @@ export type ActionState = { ok?: boolean; error?: string; message?: string; link
 
 const clip = (v: FormDataEntryValue | null, max = 200) => String(v ?? "").trim().slice(0, max);
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
-const TOKEN_DAYS = 14;
-
-async function issueLink(caseId: string, hr: string) {
-  const token = newEmployeeToken();
-  const expires = new Date(Date.now() + TOKEN_DAYS * 86400_000).toISOString();
-  const { error } = await db()
-    .from("stagity_i9_cases")
-    .update({ token_hash: sha256(token), token_expires_at: expires })
-    .eq("id", caseId);
-  if (error) throw new Error(error.message);
-  await audit(caseId, `hr:${hr}`, "employee_link_issued", { expires });
-  return `${siteOrigin()}/i9/${token}`;
-}
-
-export async function createCase(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const hr = await requireHr();
-  const first = clip(formData.get("first"), 80);
-  const last = clip(formData.get("last"), 80);
-  const email = clip(formData.get("email"), 200).toLowerCase();
-  const jobTitle = clip(formData.get("jobTitle"), 120);
-  const firstDay = clip(formData.get("firstDay"), 10);
-  if (!first || !last || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { error: "Enter the employee's first name, last name and a valid email." };
-  }
-  if (firstDay && !isDate(firstDay)) return { error: "Enter a valid first day." };
-
-  const { data, error } = await db()
-    .from("stagity_i9_cases")
-    .insert({
-      created_by: hr,
-      employee_first_name: first,
-      employee_last_name: last,
-      employee_email: email,
-      job_title: jobTitle || null,
-      first_day: firstDay || null,
-    })
-    .select("id")
-    .single();
-  if (error || !data) return { error: "Couldn't create the case. " + (error?.message ?? "") };
-  await audit(data.id, `hr:${hr}`, "case_created", { email, firstDay: firstDay || null });
-
-  const link = await issueLink(data.id, hr);
-  const sent = await sendEmployeeInvite(email, first, link, firstDay || null);
-  if (sent) await audit(data.id, `hr:${hr}`, "invite_emailed", { to: email });
-  revalidatePath("/hr");
-  return {
-    ok: true,
-    link,
-    message: sent
-      ? `Invitation emailed to ${email}. You can also copy the link below.`
-      : "The case was created but the email couldn't be sent. Copy the link below and send it to the employee yourself.",
-  };
-}
-
-export async function resendInvite(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const hr = await requireHr();
-  const id = clip(formData.get("id"), 60);
-  const { data: c } = await db().from("stagity_i9_cases").select("*").eq("id", id).single();
-  if (!c) return { error: "Case not found." };
-  if (c.status !== "invited") return { error: "The employee has already completed Section 1." };
-  const link = await issueLink(id, hr);
-  const sent = await sendEmployeeInvite(c.employee_email, c.employee_first_name, link, c.first_day);
-  if (sent) await audit(id, `hr:${hr}`, "invite_emailed", { to: c.employee_email });
-  revalidatePath(`/hr/cases/${id}`);
-  return {
-    ok: true,
-    link,
-    message: sent ? `New link emailed to ${c.employee_email}. The old link no longer works.` : "Email failed. Copy the new link below.",
-  };
-}
-
 function docFrom(formData: FormData, prefix: string): DocEntry | null {
   const title = clip(formData.get(`${prefix}_title`), 200);
   if (!title) return null;
@@ -206,7 +134,7 @@ export async function cancelCase(formData: FormData) {
   const id = clip(formData.get("id"), 60);
   await db()
     .from("stagity_i9_cases")
-    .update({ status: "cancelled", token_hash: null, token_expires_at: null })
+    .update({ status: "cancelled" })
     .eq("id", id)
     .eq("status", "invited");
   await audit(id, `hr:${hr}`, "case_cancelled");

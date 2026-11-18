@@ -15,7 +15,7 @@ function transport() {
 }
 
 /** Returns false if email isn't configured or sending failed. */
-async function send(to: string, subject: string, paragraphs: string[], button?: { label: string; href: string }) {
+export async function send(to: string, subject: string, paragraphs: string[], button?: { label: string; href: string }) {
   const tr = transport();
   if (!tr) {
     console.warn("I-9 mail skipped: SMTP_USER / SMTP_PASS not set.");
@@ -47,20 +47,34 @@ export function sendLoginCode(to: string, code: string) {
   ]);
 }
 
-export function sendEmployeeInvite(to: string, firstName: string, link: string, firstDay: string | null) {
+export function sendWelcome(to: string, firstName: string, tempPassword: string, link: string, tasks: string[]) {
+  return send(
+    to,
+    "Your Stagity Solutions portal account",
+    [
+      `Hi ${firstName},`,
+      "Stagity Solutions HR has created your account on our employee portal.",
+      ...(tasks.length ? [`Once you sign in, please: ${tasks.join("; ")}.`] : []),
+      `Sign in with your email address (${to}) and this temporary password: ${tempPassword}`,
+      "The temporary password expires in 7 days. You'll be asked to choose your own password the first time you sign in.",
+    ],
+    { label: "Sign in to the portal", href: link },
+  );
+}
+
+export function sendI9Task(to: string, firstName: string, link: string, firstDay: string | null) {
   return send(
     to,
     "Complete your Form I-9 for Stagity Solutions",
     [
       `Hi ${firstName},`,
-      "Welcome to Stagity Solutions! Federal law requires every new employee to complete Form I-9 (Employment Eligibility Verification).",
-      `Please complete Section 1 and upload photos of your identity and work authorization documents${
+      "Federal law requires every new employee to complete Form I-9 (Employment Eligibility Verification).",
+      `Please sign in to the portal, complete Section 1 and upload photos of your documents${
         firstDay ? ` no later than your first day of work (${firstDay})` : " before your first day of work"
       }. It takes about 10 minutes.`,
-      "After that, HR will schedule a short live video call where you show the same original documents on camera. Please keep them handy.",
-      "This link is private to you. Don't forward it.",
+      "After that, HR will schedule a short live video call where you show the same original documents on camera.",
     ],
-    { label: "Start Form I-9", href: link },
+    { label: "Open the portal", href: link },
   );
 }
 

@@ -45,22 +45,35 @@ The chat bubble answers from the question bank in `lib/faq.ts` — no AI service
 
 Every question typed in the chat is logged to `stagity_chat_questions`. Check rows where `answered = false` to see what to add to the FAQ next.
 
-## HR portal: remote Form I-9 (`/hr`)
+## HR portal (`/hr`) and employee portal (`/portal`)
 
-Remote I-9 using the DHS **alternative procedure** for E-Verify employers (live video document review).
-Not linked from the public site and blocked from search engines.
+Private pages, not linked from the public site and blocked from search engines.
 
-**Flow**
-1. HR signs in at `/hr/login` with a 6-digit code emailed to an address in `HR_EMAILS`.
-2. HR creates a case → the employee gets a private link (`/i9/<token>`, valid 14 days, single use).
-3. Employee completes Section 1, uploads document photos (front/back) and e-signs.
-4. HR reviews the copies, holds a live video call where the employee shows the same originals, completes and signs Section 2 (alternative-procedure box checked).
-5. HR creates the case in E-Verify and records the case number and result.
-6. "Print / save as PDF" produces the record with document copies. Enter the end date when someone leaves to get the retention date.
+**Accounts.** HR signs in at `/hr/login` with a 6-digit code emailed to an address in `HR_EMAILS`. HR registers each consultant or employee
+on **People** (name, email, phone, client, client manager, hourly rate, ADP employee ID). The system emails them the portal link and a temporary
+password (valid 7 days); on first sign-in they must choose their own password. HR can resend a temporary password or deactivate an account.
 
-**Data:** `stagity_i9_cases`, `stagity_i9_documents`, `stagity_i9_audit` (append-only), `stagity_hr_login_codes`, and the private
-`i9-documents` storage bucket. RLS is on with no policies, so only the server (secret key) can access them.
-Section 1/2 data (including SSN) is encrypted with AES-256-GCM before it's stored.
+**Form I-9** (DHS alternative procedure for E-Verify employers). HR starts it when registering someone (or from their profile). The employee signs in,
+completes Section 1, uploads document photos and e-signs. HR reviews the copies, holds a live video call where the employee shows the same originals,
+completes and signs Section 2, then records the E-Verify case number and result. "Print / save as PDF" produces the record.
 
-**Environment variables:** `SUPABASE_SECRET_KEY`, `I9_ENCRYPTION_KEY`, `I9_SESSION_SECRET`, `HR_EMAILS` (plus the existing
-`SUPABASE_URL` and `SMTP_*`). Back up `I9_ENCRYPTION_KEY` somewhere safe: without it, stored records can't be decrypted.
+**Timesheets.** Consultants enter hours per day for each week (Mon–Sun) and upload the timesheet their client approved in the client portal.
+HR approves or sends back with a note. Overtime (over 40 h/week) is calculated automatically.
+
+| Rule | Value |
+| --- | --- |
+| Approved timesheets for a month are due | 5th of the next month |
+| Payroll for that month is paid | 20th of the next month |
+| Late timesheets | roll into the next month's payroll (HR can include them) |
+| Reminders (daily cron, `vercel.json`) | Fridays; 25th, 28th, last day; 1st, 3rd, 5th; HR digest on the 6th |
+
+**Payroll.** HR calculates the month's payroll (approved hours × rate, overtime × 1.5), adds bonuses or reimbursements, locks it (hours are
+marked paid so they can't be paid twice) and downloads the CSV for **ADP RUN** import. ADP calculates taxes, deductions and net pay.
+
+**Data:** `stagity_people`, `stagity_timesheets`, `stagity_timesheet_days`, `stagity_timesheet_files`, `stagity_payroll_runs`,
+`stagity_payroll_items`, `stagity_reminder_log`, `stagity_i9_cases`, `stagity_i9_documents`, `stagity_i9_audit` (append-only),
+`stagity_hr_login_codes`; private storage buckets `i9-documents` and `timesheets`. RLS is on with no policies, so only the server (secret key)
+can access them. I-9 data (including SSN) is encrypted with AES-256-GCM before it's stored; passwords are hashed with scrypt.
+
+**Environment variables:** `SUPABASE_SECRET_KEY`, `I9_ENCRYPTION_KEY`, `I9_SESSION_SECRET`, `HR_EMAILS`, `CRON_SECRET` (plus the existing
+`SUPABASE_URL` and `SMTP_*`). Back up `I9_ENCRYPTION_KEY` somewhere safe: without it, stored I-9 records can't be decrypted.

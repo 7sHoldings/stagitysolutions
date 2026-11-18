@@ -3,7 +3,7 @@ import { company } from "@/lib/content";
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", allow: "/", disallow: ["/hr", "/i9/"] },
+    rules: { userAgent: "*", allow: "/", disallow: ["/hr", "/portal", "/api"] },
     sitemap: `${company.url}/sitemap.xml`,
   };
 }

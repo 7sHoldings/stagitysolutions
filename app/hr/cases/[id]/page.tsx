@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { audit, db, decryptJson, I9_BUCKET, requireHr } from "@/lib/i9/server";
 import { citizenshipOptions, formatSsn, maskSsn, retainUntil, statusLabels, type DocEntry, type Section1, type Section2 } from "@/lib/i9/forms";
 import { cancelCase } from "../../actions";
-import { EverifyForm, RecordForm, ResendForm } from "../../forms";
+import { EverifyForm, RecordForm } from "../../forms";
 import Section2Form from "./Section2Form";
+import HrNav from "../../HrNav";
 import PrintButton from "./PrintButton";
 
 const fmt = (iso: string | null) =>
@@ -50,7 +51,8 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
 
   return (
     <section className="container i9-page">
-      <p className="no-print"><Link href="/hr">← All cases</Link></p>
+      <HrNav active="/hr/i9" email={hr} />
+      <p className="no-print"><Link href="/hr/i9">← All Form I-9s</Link></p>
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>
           <p className="eyebrow">Form I-9 record</p>
@@ -66,8 +68,10 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       {c.status === "invited" && (
         <div className="form-card no-print">
           <h2 className="i9-h3">Waiting for the employee to complete Section 1</h2>
-          <p className="muted">Link expires {fmt(c.token_expires_at)}. Sending a new link cancels the old one.</p>
-          <ResendForm id={id} />
+          <p className="muted">
+            They complete it after signing in to the employee portal.
+            {c.person_id ? <> Resend their login from <Link href={`/hr/people/${c.person_id}`}>their profile</Link>.</> : null}
+          </p>
           <form action={cancelCase}>
             <input type="hidden" name="id" value={id} />
             <button className="btn btn-outline">Cancel this case</button>

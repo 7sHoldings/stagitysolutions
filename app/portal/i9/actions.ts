@@ -1,7 +1,8 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { audit, caseForToken, db, encryptJson, hrEmails, I9_BUCKET, siteOrigin } from "@/lib/i9/server";
+import { audit, db, encryptJson, hrEmails, I9_BUCKET, siteOrigin } from "@/lib/i9/server";
+import { portalPerson } from "@/lib/portal/server";
 import { sendHrSection1Done } from "@/lib/i9/mail";
 import { listADocs, listBDocs, listCDocs, usStates, type CitizenshipStatus, type Section1 } from "@/lib/i9/forms";
 
@@ -14,15 +15,24 @@ const MIME_EXT: Record<string, string> = {
   "application/pdf": "pdf",
 };
 
-async function openCase(token: string) {
-  const c = await caseForToken(token);
-  if (!c || c.expired || c.status !== "invited") return null;
-  return c;
+/** The signed-in person's open I-9 case (Section 1 not yet signed). */
+async function openCase() {
+  const p = await portalPerson();
+  if (!p || p.must_change_password) return null;
+  const { data } = await db()
+    .from("stagity_i9_cases")
+    .select("*")
+    .eq("person_id", p.id)
+    .eq("status", "invited")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data;
 }
 
-export async function getUploadUrl(token: string, list: string, side: string, mime: string) {
-  const c = await openCase(token);
-  if (!c) return { error: "This link is no longer active." };
+export async function getUploadUrl(list: string, side: string, mime: string) {
+  const c = await openCase();
+  if (!c) return { error: "Please sign in again." };
   if (!["A", "B", "C"].includes(list) || !["front", "back"].includes(side)) return { error: "Invalid upload." };
   const ext = MIME_EXT[mime];
   if (!ext) return { error: "Please upload a photo (JPG, PNG, HEIC) or a PDF." };
@@ -32,9 +42,9 @@ export async function getUploadUrl(token: string, list: string, side: string, mi
   return { url: data.signedUrl, path };
 }
 
-export async function recordUpload(token: string, path: string, list: string, side: string, mime: string, name: string) {
-  const c = await openCase(token);
-  if (!c) return { error: "This link is no longer active." };
+export async function recordUpload(path: string, list: string, side: string, mime: string, name: string) {
+  const c = await openCase();
+  if (!c) return { error: "Please sign in again." };
   if (!path.startsWith(`${c.id}/`) || path.includes("..")) return { error: "Invalid upload." };
   const folder = path.split("/")[0];
   const file = path.slice(folder.length + 1);
@@ -58,9 +68,9 @@ export async function recordUpload(token: string, path: string, list: string, si
 const s = (v: unknown, max = 120) => String(v ?? "").trim().slice(0, max);
 const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
 
-export async function submitSection1(token: string, input: Record<string, unknown>) {
-  const c = await openCase(token);
-  if (!c) return { error: "This link is no longer active. Please contact HR for a new one." };
+export async function submitSection1(input: Record<string, unknown>) {
+  const c = await openCase();
+  if (!c) return { error: "Your Form I-9 isn't open for changes. Please contact HR." };
 
   const status = s(input.status, 30) as CitizenshipStatus;
   const choice = (input.docChoice ?? {}) as Record<string, unknown>;
@@ -135,8 +145,6 @@ export async function submitSection1(token: string, input: Record<string, unknow
       section1_enc: encryptJson(data),
       section1_signed_at: data.signedAt,
       status: "section1_complete",
-      token_hash: null, // the link stops working once Section 1 is signed
-      token_expires_at: null,
     })
     .eq("id", c.id)
     .eq("status", "invited");

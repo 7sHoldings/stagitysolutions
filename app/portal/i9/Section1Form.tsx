@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { getUploadUrl, recordUpload, submitSection1 } from "../actions";
+import { getUploadUrl, recordUpload, submitSection1 } from "./actions";
 import { citizenshipOptions, listADocs, listBDocs, listCDocs, usStates } from "@/lib/i9/forms";
 
 type Uploaded = Record<string, string>; // key `${list}-${side}` -> file name
@@ -25,8 +25,8 @@ async function prepare(file: File): Promise<{ blob: Blob; mime: string }> {
   }
 }
 
-function UploadSlot({ token, list, side, label, uploaded, onDone }: {
-  token: string; list: "A" | "B" | "C"; side: "front" | "back"; label: string; uploaded?: string; onDone: (name: string) => void;
+function UploadSlot({ list, side, label, uploaded, onDone }: {
+  list: "A" | "B" | "C"; side: "front" | "back"; label: string; uploaded?: string; onDone: (name: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -39,11 +39,11 @@ function UploadSlot({ token, list, side, label, uploaded, onDone }: {
     setError("");
     try {
       const { blob, mime } = await prepare(file);
-      const up = await getUploadUrl(token, list, side, mime);
+      const up = await getUploadUrl(list, side, mime);
       if ("error" in up && up.error) throw new Error(up.error);
       const res = await fetch(up.url!, { method: "PUT", body: blob, headers: { "content-type": mime, "x-upsert": "false" } });
       if (!res.ok) throw new Error("Upload failed. Please try again.");
-      const rec = await recordUpload(token, up.path!, list, side, mime, file.name);
+      const rec = await recordUpload(up.path!, list, side, mime, file.name);
       if ("error" in rec && rec.error) throw new Error(rec.error);
       onDone(file.name);
     } catch (err) {
@@ -67,8 +67,8 @@ function UploadSlot({ token, list, side, label, uploaded, onDone }: {
   );
 }
 
-export default function Section1Form({ token, firstName, lastName, email }: {
-  token: string; firstName: string; lastName: string; email: string;
+export default function Section1Form({ firstName, lastName, email }: {
+  firstName: string; lastName: string; email: string;
 }) {
   const [f, setF] = useState<Record<string, string | boolean>>({
     firstName, lastName, email, middleInitial: "", otherLastNames: "", address: "", apt: "", city: "", state: "TX", zip: "",
@@ -90,7 +90,7 @@ export default function Section1Form({ token, firstName, lastName, email }: {
     e.preventDefault();
     setError("");
     start(async () => {
-      const res = await submitSection1(token, { ...f, docChoice: { mode, ...docs } });
+      const res = await submitSection1({ ...f, docChoice: { mode, ...docs } });
       if ("error" in res && res.error) {
         setError(res.error);
         return;
@@ -113,7 +113,7 @@ export default function Section1Form({ token, firstName, lastName, email }: {
   }
 
   const slot = (list: "A" | "B" | "C", side: "front" | "back", label: string) => (
-    <UploadSlot token={token} list={list} side={side} label={label} uploaded={uploaded[`${list}-${side}`]}
+    <UploadSlot list={list} side={side} label={label} uploaded={uploaded[`${list}-${side}`]}
       onDone={(name) => setUploaded((u) => ({ ...u, [`${list}-${side}`]: name }))} />
   );
 

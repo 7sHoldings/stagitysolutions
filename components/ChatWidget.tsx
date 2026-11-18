@@ -117,7 +117,7 @@ export default function ChatWidget() {
   };
 
   // Keep the public chat assistant off the private HR and Form I-9 pages.
-  if (pathname?.startsWith("/hr") || pathname?.startsWith("/i9/")) return null;
+  if (pathname?.startsWith("/hr") || pathname?.startsWith("/portal")) return null;
 
   return (
     <>

@@ -13,7 +13,8 @@ import { redirect } from "next/navigation";
  *   I9_ENCRYPTION_KEY       — 32 random bytes, base64. Encrypts Section 1/2 data (incl. SSN) before it is stored.
  *   I9_SESSION_SECRET       — random string (32+ chars). Signs the HR login cookie.
  *   HR_EMAILS               — comma-separated list of HR emails allowed to sign in (e.g. hr@stagitysolutions.com)
- *   SMTP_USER / SMTP_PASS   — already set; used to email login codes and employee links.
+ *   SMTP_USER / SMTP_PASS   — already set; used to email login codes, temporary passwords and reminders.
+ *   CRON_SECRET             — random string; authorizes the daily reminder job (/api/cron/reminders).
  */
 
 export class I9ConfigError extends Error {}
@@ -71,11 +72,6 @@ export function decryptJson<T>(payload: string | null): T | null {
 
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
-/** Long random token for the employee's private link. Only its hash is stored. */
-export function newEmployeeToken(): string {
-  return randomBytes(32).toString("base64url");
-}
-
 export function newLoginCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, "0");
 }
@@ -118,7 +114,7 @@ export async function startHrSession(email: string) {
   (await cookies()).set(SESSION_COOKIE, `${value}.${sign(value)}`, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    sameSite: "lax", // lax so links in HR notification emails open signed in
     path: "/",
     maxAge: SESSION_HOURS * 3600,
   });
@@ -148,20 +144,6 @@ export async function requireHr(): Promise<string> {
   const email = await hrSession();
   if (!email) redirect("/hr/login");
   return email;
-}
-
-// ---------- Employee link ----------
-
-export async function caseForToken(token: string) {
-  if (!token || token.length < 30) return null;
-  const { data } = await db()
-    .from("stagity_i9_cases")
-    .select("*")
-    .eq("token_hash", sha256(token))
-    .maybeSingle();
-  if (!data) return null;
-  if (data.token_expires_at && new Date(data.token_expires_at) < new Date()) return { ...data, expired: true as const };
-  return { ...data, expired: false as const };
 }
 
 export function siteOrigin(): string {
