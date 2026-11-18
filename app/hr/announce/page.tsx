@@ -21,9 +21,9 @@ export default async function Announce() {
   const previewMonth = `${defaultMonth}-01`;
   // Pre-fill the send box with the saved list, minus anyone already emailed.
   const used = new Set(rows.filter((r) => r.sent_at).map((r) => r.email.toLowerCase()));
-  const pendingDraft = (draft?.value ?? "")
+  const pendingDraft = String(draft?.value ?? "")
     .split(/\r?\n/)
-    .filter((l) => l.trim() && ![...used].some((e) => l.toLowerCase().includes(e)))
+    .filter((l: string) => l.trim() && ![...used].some((e) => l.toLowerCase().includes(e)))
     .join("\n");
 
   return (
