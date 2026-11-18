@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { audit, db, requireHr, siteOrigin } from "@/lib/i9/server";
+import { redirect } from "next/navigation";
+import { audit, db, I9_BUCKET, requireHr, siteOrigin } from "@/lib/i9/server";
 import { sendI9Task, sendWelcome } from "@/lib/i9/mail";
-import { hashPassword, tempPassword } from "@/lib/portal/server";
+import { hashPassword, tempPassword, TS_BUCKET } from "@/lib/portal/server";
 import type { ActionState } from "../actions";
 import { recomputeDraft, syncDraftInvoices } from "@/lib/invoices/server";
 
@@ -14,35 +15,66 @@ const TEMP_DAYS = 7;
 
 const num = (v: string) => (v ? Number(v) : null);
 
+/** Personal details only. Rates, vendor and client are set when the consultant is added to a vendor. */
 function details(formData: FormData) {
-  const rate = clip(formData.get("payRate"), 12);
-  const consultant = clip(formData.get("kind"), 20) !== "employee";
   return {
     first_name: clip(formData.get("first"), 80),
     last_name: clip(formData.get("last"), 80),
     phone: clip(formData.get("phone"), 30) || null,
     kind: clip(formData.get("kind"), 20) === "employee" ? "employee" : "consultant",
-    client_name: clip(formData.get("clientName"), 120) || null,
-    client_manager_name: clip(formData.get("managerName"), 120) || null,
-    client_manager_email: clip(formData.get("managerEmail"), 200).toLowerCase() || null,
-    pay_rate: rate ? Number(rate) : null,
     start_date: clip(formData.get("startDate"), 10) || null,
-    end_date: clip(formData.get("endDate"), 10) || null,
-    adp_employee_id: clip(formData.get("adpId"), 30) || null,
-    vendor_id: consultant ? clip(formData.get("vendorId"), 60) || null : null,
-    bill_rate: consultant ? num(clip(formData.get("billRate"), 12)) : null,
-    po_number: consultant ? clip(formData.get("poNumber"), 80) || null : null,
+    ...(formData.has("endDate") ? { end_date: clip(formData.get("endDate"), 10) || null } : {}),
+    ...(formData.has("adpId") ? { adp_employee_id: clip(formData.get("adpId"), 30) || null } : {}),
   };
 }
 
 function problem(d: ReturnType<typeof details>): string | null {
   if (!d.first_name || !d.last_name) return "Enter first and last name.";
-  if (d.pay_rate !== null && (!Number.isFinite(d.pay_rate) || d.pay_rate < 0 || d.pay_rate > 10000)) return "Enter a valid hourly rate.";
-  if (d.kind === "consultant" && d.pay_rate === null) return "Enter the consultant's hourly pay rate.";
-  for (const r of [d.bill_rate]) if (r !== null && (!Number.isFinite(r) || r < 0 || r > 10000)) return "Enter a valid bill rate.";
-  if (d.client_manager_email && !emailOk(d.client_manager_email)) return "Enter a valid client manager email.";
   if ((d.start_date && !isDate(d.start_date)) || (d.end_date && !isDate(d.end_date))) return "Enter valid dates.";
   return null;
+}
+
+/** Vendor onboarding: puts a consultant on a vendor with their pay rate, bill rate and client details. */
+export async function assignConsultant(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const personId = clip(formData.get("personId"), 60);
+  const vendorId = clip(formData.get("vendorId"), 60);
+  const pay = num(clip(formData.get("payRate"), 12));
+  const bill = num(clip(formData.get("billRate"), 12));
+  const managerEmail = clip(formData.get("managerEmail"), 200).toLowerCase() || null;
+  if (!personId) return { error: "Choose a consultant." };
+  if (pay === null || !Number.isFinite(pay) || pay < 0 || pay > 10000) return { error: "Enter the consultant's hourly pay rate." };
+  if (bill === null || !Number.isFinite(bill) || bill < 0 || bill > 10000) return { error: "Enter the hourly bill rate to the vendor." };
+  if (managerEmail && !emailOk(managerEmail)) return { error: "Enter a valid client manager email." };
+  const { error } = await db()
+    .from("stagity_people")
+    .update({
+      vendor_id: vendorId,
+      pay_rate: pay,
+      bill_rate: bill,
+      client_name: clip(formData.get("clientName"), 120) || null,
+      client_manager_name: clip(formData.get("managerName"), 120) || null,
+      client_manager_email: managerEmail,
+      po_number: clip(formData.get("poNumber"), 80) || null,
+      kind: "consultant",
+    })
+    .eq("id", personId);
+  if (error) return { error: error.message };
+  await audit(null, `hr:${hr}`, "consultant_assigned", { personId, vendorId, pay, bill });
+  await syncDraftInvoices(personId);
+  const { data: drafts } = await db().from("stagity_invoices").select("id").eq("person_id", personId).eq("status", "draft");
+  for (const dr of drafts ?? []) await recomputeDraft(dr.id);
+  revalidatePath("/hr/vendors");
+  revalidatePath(`/hr/people/${personId}`);
+  return { ok: true, message: "Saved." };
+}
+
+export async function unassignConsultant(formData: FormData) {
+  const hr = await requireHr();
+  const personId = clip(formData.get("personId"), 60);
+  await db().from("stagity_people").update({ vendor_id: null }).eq("id", personId);
+  await audit(null, `hr:${hr}`, "consultant_unassigned", { personId });
+  revalidatePath("/hr/vendors");
 }
 
 async function issueTempPassword(id: string) {
@@ -114,9 +146,7 @@ export async function updatePerson(_prev: ActionState, formData: FormData): Prom
   const { error } = await db().from("stagity_people").update(d).eq("id", id);
   if (error) return { error: error.message };
   await audit(null, `hr:${hr}`, "person_updated", { personId: id });
-  await syncDraftInvoices(id); // new vendor/bill rate applies to open drafts
-  const { data: drafts } = await db().from("stagity_invoices").select("id").eq("person_id", id).eq("status", "draft");
-  for (const dr of drafts ?? []) await recomputeDraft(dr.id);
+
   revalidatePath(`/hr/people/${id}`);
   return { ok: true, message: "Saved." };
 }
@@ -157,4 +187,52 @@ export async function startI9(_prev: ActionState, formData: FormData): Promise<A
   const sent = await sendI9Task(p.email, p.first_name, `${siteOrigin()}/portal/i9`, firstDay || p.start_date);
   revalidatePath(`/hr/people/${id}`);
   return { ok: true, message: sent ? "Form I-9 started and the employee was emailed." : "Form I-9 started (email failed; tell the employee to sign in)." };
+}
+
+/**
+ * Deletes a person and their working records (draft timesheets, uploads, draft invoices/payroll lines,
+ * an unstarted I-9). Refused if anything must be kept: sent/paid invoices, locked payroll, or an I-9
+ * with Section 1 completed. Use Deactivate for those.
+ */
+export async function deletePerson(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = clip(formData.get("id"), 60);
+  const { data: p } = await db().from("stagity_people").select("id, first_name, last_name, email").eq("id", id).maybeSingle();
+  if (!p) return { error: "Not found." };
+
+  const [{ count: sentInvoices }, { data: payroll }, { data: i9s }] = await Promise.all([
+    db().from("stagity_invoices").select("id", { count: "exact", head: true }).eq("person_id", id).neq("status", "draft"),
+    db().from("stagity_payroll_items").select("id, stagity_payroll_runs(status)").eq("person_id", id),
+    db().from("stagity_i9_cases").select("id, status").eq("person_id", id),
+  ]);
+  const lockedPayroll = (payroll ?? []).some((x) => (x.stagity_payroll_runs as unknown as { status: string } | null)?.status === "locked");
+  const startedI9 = (i9s ?? []).some((c) => !["invited", "cancelled"].includes(c.status));
+  if (sentInvoices || lockedPayroll || startedI9) {
+    const why = [sentInvoices ? "sent invoices" : "", lockedPayroll ? "locked payroll" : "", startedI9 ? "a completed Form I-9" : ""].filter(Boolean).join(", ");
+    return { error: `${p.first_name} has ${why}, which must be kept for your records. Use Deactivate instead.` };
+  }
+
+  // Remove uploaded timesheet files from storage, then the rows.
+  const { data: sheets } = await db().from("stagity_timesheets").select("id").eq("person_id", id);
+  const sheetIds = (sheets ?? []).map((s) => s.id);
+  if (sheetIds.length) {
+    const { data: files } = await db().from("stagity_timesheet_files").select("storage_path").in("timesheet_id", sheetIds);
+    if (files?.length) await db().storage.from(TS_BUCKET).remove(files.map((f) => f.storage_path));
+  }
+  const i9Ids = (i9s ?? []).map((c) => c.id);
+  if (i9Ids.length) {
+    const { data: docs } = await db().from("stagity_i9_documents").select("storage_path").in("case_id", i9Ids);
+    if (docs?.length) await db().storage.from(I9_BUCKET).remove(docs.map((d) => d.storage_path));
+  }
+  await db().from("stagity_timesheet_days").update({ invoice_id: null, payroll_run_id: null }).eq("person_id", id);
+  await db().from("stagity_invoices").delete().eq("person_id", id).eq("status", "draft");
+  await db().from("stagity_payroll_items").delete().eq("person_id", id);
+  await db().from("stagity_timesheet_days").delete().eq("person_id", id);
+  if (sheetIds.length) await db().from("stagity_timesheets").delete().in("id", sheetIds);
+  if (i9Ids.length) await db().from("stagity_i9_cases").delete().in("id", i9Ids);
+  const { error } = await db().from("stagity_people").delete().eq("id", id);
+  if (error) return { error: `Couldn't delete: ${error.message}` };
+  await audit(null, `hr:${hr}`, "person_deleted", { personId: id, email: p.email, name: `${p.first_name} ${p.last_name}` });
+  revalidatePath("/hr/people");
+  redirect("/hr/people");
 }

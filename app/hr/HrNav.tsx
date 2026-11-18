@@ -4,28 +4,27 @@ import { signOut } from "./login/actions";
 const tabs = [
   { href: "/hr", label: "Overview" },
   { href: "/hr/people", label: "People" },
+  { href: "/hr/vendors", label: "Vendors" },
   { href: "/hr/timesheets", label: "Timesheets" },
   { href: "/hr/invoices", label: "Invoices" },
   { href: "/hr/payroll", label: "Payroll" },
-  { href: "/hr/vendors", label: "Vendors" },
   { href: "/hr/i9", label: "Form I-9" },
 ];
 
 export default function HrNav({ active, email }: { active: string; email: string }) {
   return (
-    <div className="i9-stack no-print" style={{ gap: 18 }}>
-      <div className="hero-row" style={{ alignItems: "center" }}>
-        <span />
-        <form action={signOut} className="i9-signout">
-          <span className="muted">{email}</span>
-          <button className="btn btn-outline" style={{ minHeight: 40, padding: "8px 18px" }}>Sign out</button>
-        </form>
-      </div>
-      <nav className="i9-nav" aria-label="HR sections">
+    <div className="hr-bar no-print">
+      <nav className="hr-tabs" aria-label="Admin sections">
         {tabs.map((t) => (
-          <Link key={t.href} href={t.href} className={active === t.href ? "on" : ""}>{t.label}</Link>
+          <Link key={t.href} href={t.href} className={active === t.href ? "on" : ""} aria-current={active === t.href ? "page" : undefined}>
+            {t.label}
+          </Link>
         ))}
       </nav>
+      <form action={signOut} className="hr-user">
+        <span className="muted i9-small">{email}</span>
+        <button className="btn btn-outline hr-btn-sm">Sign out</button>
+      </form>
     </div>
   );
 }

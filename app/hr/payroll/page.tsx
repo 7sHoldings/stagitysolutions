@@ -9,7 +9,7 @@ export default async function Payroll() {
   const { data: runs } = await db().from("stagity_payroll_runs").select("*").order("period_month", { ascending: false });
   const last = addMonths(monthStart(todayCT()), -1).slice(0, 7);
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/payroll" email={hr} />
       <h1 className="h2">Payroll</h1>
       <p className="muted">

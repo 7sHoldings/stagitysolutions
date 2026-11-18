@@ -38,7 +38,7 @@ export default async function HrHome() {
   const payMonth = addMonths(monthStart(today), -1);
 
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr" email={hr} />
       <h1 className="h2">Overview</h1>
       <div className="i9-tiles">

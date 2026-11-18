@@ -23,7 +23,7 @@ export default async function I9List() {
     .order("created_at", { ascending: false })
     .limit(300);
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/i9" email={hr} />
       <h1 className="h2">Form I-9</h1>
       <p className="muted">To start a Form I-9, register the person on the <Link href="/hr/people">People</Link> page (or open them and click &quot;Start Form I-9&quot;).</p>

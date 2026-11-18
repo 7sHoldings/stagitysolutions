@@ -26,7 +26,7 @@ export default async function PayrollRun({ params }: { params: Promise<{ id: str
   const missingAdp = rows.filter((r) => !r.p.adp_employee_id);
 
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/payroll" email={hr} />
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>
@@ -39,6 +39,11 @@ export default async function PayrollRun({ params }: { params: Promise<{ id: str
 
       {missingAdp.length > 0 && (
         <p className="form-status err">Add an ADP employee ID for: {missingAdp.map((r) => `${r.p.first_name} ${r.p.last_name}`).join(", ")} (People page).</p>
+      )}
+      {rows.some((r) => !Number(r.rate)) && (
+        <p className="form-status err">
+          No pay rate for: {rows.filter((r) => !Number(r.rate)).map((r) => `${r.p.first_name} ${r.p.last_name}`).join(", ")}. Add them to their vendor with a pay rate (Vendors page), then recalculate.
+        </p>
       )}
 
       <div className="i9-table-wrap">

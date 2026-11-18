@@ -32,7 +32,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const consultant = `${person.first_name} ${person.last_name}`;
 
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/invoices" email={hr} />
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>

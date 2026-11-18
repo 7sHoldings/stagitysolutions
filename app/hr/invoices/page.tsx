@@ -46,7 +46,7 @@ export default async function Invoices() {
   const name = (r: Row) => `${r.stagity_people.first_name} ${r.stagity_people.last_name}`;
 
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/invoices" email={hr} />
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>

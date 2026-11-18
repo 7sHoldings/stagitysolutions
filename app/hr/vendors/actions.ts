@@ -34,3 +34,24 @@ export async function saveVendor(_prev: ActionState, formData: FormData): Promis
   revalidatePath("/hr/vendors");
   return { ok: true, message: id ? "Saved." : `${row.name} added.` };
 }
+
+/** Deletes a vendor. Refused if invoices were already sent to it; its consultants are simply unassigned. */
+export async function deleteVendor(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = clip(formData.get("id"), 60);
+  const { data: v } = await db().from("stagity_vendors").select("id, name").eq("id", id).maybeSingle();
+  if (!v) return { error: "Not found." };
+  const { count } = await db().from("stagity_invoices").select("id", { count: "exact", head: true }).eq("vendor_id", id).neq("status", "draft");
+  if (count) return { error: `Invoices were already sent to ${v.name}, so it must be kept for your records. Untick "Active" to hide it instead.` };
+  const { data: drafts } = await db().from("stagity_invoices").select("id").eq("vendor_id", id);
+  if (drafts?.length) {
+    await db().from("stagity_timesheet_days").update({ invoice_id: null }).in("invoice_id", drafts.map((d) => d.id));
+    await db().from("stagity_invoices").delete().in("id", drafts.map((d) => d.id));
+  }
+  await db().from("stagity_people").update({ vendor_id: null }).eq("vendor_id", id);
+  const { error } = await db().from("stagity_vendors").delete().eq("id", id);
+  if (error) return { error: error.message };
+  await audit(null, `hr:${hr}`, "vendor_deleted", { vendorId: id, name: v.name });
+  revalidatePath("/hr/vendors");
+  return { ok: true, message: `${v.name} deleted.` };
+}

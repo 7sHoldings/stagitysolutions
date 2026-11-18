@@ -27,7 +27,7 @@ export default async function HrTimesheet({ params }: { params: Promise<{ id: st
   const ot = days?.reduce((a, d) => a + Number(d.overtime_hours), 0) ?? 0;
 
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/timesheets" email={hr} />
       <div>
         <p><Link href={`/hr/timesheets?month=${s.week_start.slice(0, 7)}`}>← Timesheets</Link></p>

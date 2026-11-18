@@ -50,7 +50,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const status = citizenshipOptions.find((o) => o.value === s1?.status)?.label;
 
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/i9" email={hr} />
       <p className="no-print"><Link href="/hr/i9">← All Form I-9s</Link></p>
       <div className="hero-row" style={{ alignItems: "flex-end" }}>

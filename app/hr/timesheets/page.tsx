@@ -18,7 +18,7 @@ export default async function HrTimesheets({ searchParams }: { searchParams: Pro
   const ym = (m: string) => m.slice(0, 7);
 
   return (
-    <section className="container i9-page">
+    <section className="container hr-page">
       <HrNav active="/hr/timesheets" email={hr} />
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>
