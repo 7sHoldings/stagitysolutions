@@ -5,7 +5,7 @@ import { company, jobs, photos } from "@/lib/content";
 
 export const metadata: Metadata = {
   title: "Careers",
-  description: "Join Stagity Solutions. See current openings in Texas and apply.",
+  description: "Join Stagity Solutions. See current openings or send us your resume.",
   alternates: { canonical: "/careers" },
 };
 
@@ -34,16 +34,17 @@ export default function CareersPage() {
           <div className="section-head">
             <div className="titles">
               <p className="eyebrow">Current openings</p>
-              <h2 className="display-md">Find your next role.</h2>
+              <h2 className="display-md">{jobs.length > 0 ? "Find your next role." : "No openings right now."}</h2>
             </div>
             <p className="lead" style={{ maxWidth: 400, fontSize: 16 }}>
-              Don&apos;t see your role? Send your resume to{" "}
+              {jobs.length > 0 ? "Don't see your role? Send your resume to " : "We're not hiring at the moment, but we'd still love to hear from you. Send your resume to "}
               <a href={`mailto:${company.email}`} style={{ color: "#fff", textDecoration: "underline" }}>
                 {company.email}
               </a>
-              .
+              {jobs.length > 0 ? "." : " and we'll keep it on file for future roles."}
             </p>
           </div>
+          {jobs.length > 0 && (
           <div style={{ borderTop: "1px solid rgba(255,255,255,.2)" }}>
             {jobs.map((j) => (
               <div key={j.title} className="job-row">
@@ -65,6 +66,7 @@ export default function CareersPage() {
               </div>
             ))}
           </div>
+          )}
         </div>
       </section>
 

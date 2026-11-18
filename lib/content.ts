@@ -471,13 +471,4 @@ export type Job = {
   description: string;
 };
 
-export const jobs: Job[] = [
-  {
-    title: "Software Engineer",
-    location: "Farmers Branch, TX",
-    type: "Full-time",
-    qualification: "Bachelor's degree in Computer Science",
-    description:
-      "Build a responsive Angular UI architecture and develop components that can be reused across our applications.",
-  },
-];
+export const jobs: Job[] = [];
