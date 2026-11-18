@@ -2,7 +2,7 @@ import "server-only";
 import { audit, db, hrEmails } from "@/lib/i9/server";
 import { send } from "@/lib/i9/mail";
 import { TS_BUCKET } from "@/lib/portal/server";
-import { addDays, money, monthLabel, shortDate, todayCT } from "@/lib/portal/dates";
+import { addDays, mondayOf, money, monthLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import { company } from "@/lib/content";
 import { buildInvoicePdf, type InvoicePdfData } from "./pdf";
 import { recomputeDraft, type Invoice, type Vendor } from "./server";
@@ -23,6 +23,17 @@ export async function loadInvoice(id: string): Promise<Loaded | null> {
 }
 
 export async function pdfData({ inv, vendor, person }: Loaded): Promise<InvoicePdfData> {
+  const { data: days } = await db().from("stagity_timesheet_days").select("work_date, hours").eq("invoice_id", inv.id);
+  const byWeek = new Map<string, number>();
+  for (const day of days ?? []) {
+    const m = mondayOf(day.work_date);
+    byWeek.set(m, (byWeek.get(m) ?? 0) + Number(day.hours));
+  }
+  const weeks = [...byWeek].sort(([a], [b]) => a.localeCompare(b)).map(([m, hours]) => {
+    const from = m < inv.period_start ? inv.period_start : m;
+    const to = addDays(m, 6) > inv.period_end ? inv.period_end : addDays(m, 6);
+    return { label: `${mdY(from)} – ${mdY(to)}`, hours: Math.round(hours * 100) / 100 };
+  });
   const today = todayCT();
   const issue = inv.issue_date ?? today;
   return {
@@ -36,6 +47,7 @@ export async function pdfData({ inv, vendor, person }: Loaded): Promise<InvoiceP
     periodEnd: inv.period_end,
     poNumber: inv.po_number,
     hours: Number(inv.regular_hours) + Number(inv.overtime_hours),
+    weeks,
     billRate: Number(inv.bill_rate),
     total: Number(inv.total),
     notes: inv.notes,

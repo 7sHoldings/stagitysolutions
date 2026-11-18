@@ -17,6 +17,7 @@ export type InvoicePdfData = {
   periodEnd: string;
   poNumber: string | null;
   hours: number; // all hours worked in the period
+  weeks?: { label: string; hours: number }[]; // hours per week within the period
   billRate: number;
   total: number; // hours × billRate
   notes: string | null;
@@ -110,43 +111,70 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
     ["Invoice date", mdY(d.issueDate)],
     ["Service period", d.periodLabel],
     ["Consultant", d.consultant],
-    ...(d.poNumber ? ([["PO / reference", d.poNumber]] as [string, string][]) : []),
+    [d.poNumber ? "PO / reference" : "Client", d.poNumber || d.client || "—"],
   ];
   const colW = W / 4;
   page.drawRectangle({ x: L, y: y - 40, width: W, height: 52, color: panel });
+  page.drawRectangle({ x: L, y: y - 40, width: 3, height: 52, color: sky });
   details.forEach(([k, v], i) => {
     const x = L + 16 + i * colW;
     label(k, x, y - 6);
     page.drawText(wrap(v, bold, 10.5, colW - 22)[0], { x, y: y - 24, size: 10.5, font: bold, color: ink });
   });
 
-  // One line: total hours × bill rate
-  y = 452;
-  const c = { desc: L, hours: 382, rate: 466, amount: R };
-  label("Description", c.desc, y);
-  right(page, "HOURS", c.hours, y, bold, 8, muted);
-  right(page, "RATE", c.rate, y, bold, 8, muted);
-  right(page, "AMOUNT", c.amount, y, bold, 8, muted);
-  page.drawLine({ start: { x: L, y: y - 9 }, end: { x: R, y: y - 9 }, thickness: 1.5, color: ink });
-  y -= 32;
-  page.drawText(`${d.consultant}: consulting services`, { x: c.desc, y, size: 10.5, font: bold, color: ink });
-  page.drawText(wrap(`${d.client ? `${d.client} · ` : ""}${d.periodLabel}`, font, 9, 300)[0], { x: c.desc, y: y - 14, size: 9, font, color: muted });
-  right(page, d.hours.toFixed(2), c.hours, y, font, 10.5, body);
-  right(page, usd(d.billRate), c.rate, y, font, 10.5, body);
-  right(page, usd(d.total), c.amount, y, bold, 10.5);
-  page.drawLine({ start: { x: L, y: y - 26 }, end: { x: R, y: y - 26 }, thickness: 0.75, color: line });
+  // Line item table: one line, hours × rate
+  y = 462;
+  const c = { desc: L + 12, hours: 390, rate: 470, amount: R - 12 };
+  page.drawRectangle({ x: L, y: y - 9, width: W, height: 26, color: ink });
+  page.drawText("DESCRIPTION", { x: c.desc, y, size: 8.5, font: bold, color: white });
+  right(page, "HOURS", c.hours, y, bold, 8.5, white);
+  right(page, "RATE", c.rate, y, bold, 8.5, white);
+  right(page, "AMOUNT", c.amount, y, bold, 8.5, white);
+  y -= 36;
+  page.drawText("Consulting services", { x: c.desc, y, size: 11, font: bold, color: ink });
+  page.drawText(wrap(`${d.consultant}${d.client ? ` at ${d.client}` : ""}`, font, 9.5, 300)[0], { x: c.desc, y: y - 15, size: 9.5, font, color: body });
+  page.drawText(`Service dates: ${mdY(d.periodStart)} – ${mdY(d.periodEnd)}`, { x: c.desc, y: y - 29, size: 9, font, color: muted });
+  right(page, d.hours.toFixed(2), c.hours, y, font, 11, body);
+  right(page, usd(d.billRate), c.rate, y, font, 11, body);
+  right(page, usd(d.total), c.amount, y, bold, 11);
+  page.drawLine({ start: { x: L, y: y - 44 }, end: { x: R, y: y - 44 }, thickness: 0.75, color: line });
 
-  // Total
-  y -= 56;
-  page.drawText("Total", { x: 372, y, size: 12, font: bold, color: ink });
-  right(page, usd(d.total), R, y, bold, 14);
+  // Total bar
+  y -= 84;
+  page.drawRectangle({ x: 330, y: y - 14, width: R - 330, height: 38, color: ink });
+  page.drawRectangle({ x: 330, y: y - 14, width: 4, height: 38, color: orange });
+  page.drawText("TOTAL", { x: 348, y: y + 1, size: 11, font: bold, color: white });
+  right(page, usd(d.total), R - 14, y, bold, 16, white);
+
+  // Weekly hours breakdown (helps the vendor match the approved timesheets)
+  if (d.weeks?.length) {
+    let wy = y + 6;
+    label("Hours by week", L, wy);
+    wy -= 8;
+    for (const w of d.weeks.slice(0, 7)) {
+      wy -= 17;
+      page.drawText(w.label, { x: L, y: wy, size: 9.5, font, color: body });
+      right(page, `${w.hours.toFixed(2)} h`, L + 230, wy, font, 9.5, ink);
+      page.drawLine({ start: { x: L, y: wy - 6 }, end: { x: L + 230, y: wy - 6 }, thickness: 0.5, color: line });
+    }
+    wy -= 19;
+    page.drawText("Total hours", { x: L, y: wy, size: 9.5, font: bold, color: ink });
+    right(page, `${d.hours.toFixed(2)} h`, L + 230, wy, bold, 9.5, ink);
+    y = Math.min(y - 30, wy - 20);
+  } else {
+    y -= 40;
+  }
 
   if (d.notes) {
-    y -= 50;
+    y -= 24;
     label("Notes", L, y);
     wrap(d.notes, font, 9.5, W).slice(0, 3).forEach((t, i) => page.drawText(t, { x: L, y: y - 16 - i * 13.5, size: 9.5, font, color: body }));
   }
 
+  // Footer
+  page.drawLine({ start: { x: L, y: 62 }, end: { x: R, y: 62 }, thickness: 0.75, color: line });
+  const foot = `${company.legalName}  ·  ${company.addressLine1}, ${company.addressLine2}  ·  ${company.phone}  ·  ${company.url.replace("https://", "")}`;
+  page.drawText(foot, { x: (612 - font.widthOfTextAtSize(foot, 8.5)) / 2, y: 44, size: 8.5, font, color: muted });
   page.drawRectangle({ x: 0, y: 0, width: 612, height: 6, color: ink });
   return doc.save();
 }
