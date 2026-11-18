@@ -77,8 +77,7 @@ export default async function PayrollRun({ params }: { params: Promise<{ id: str
           <h2 className="i9-h3">Finish</h2>
           <form action={recalculate} className="i9-stack">
             <input type="hidden" name="id" value={id} />
-            <label className="i9-check"><input type="checkbox" name="includeLate" defaultChecked={run.include_late} />
-              Include timesheets submitted after the {deadlineFor(run.period_month)} deadline (otherwise they move to next month&apos;s payroll)</label>
+            <p className="muted i9-small">Includes every timesheet approved so far, including late ones. Anything approved after you lock goes on next month&apos;s payroll.</p>
             <button className="btn btn-outline" style={{ alignSelf: "flex-start" }}>Recalculate from timesheets</button>
           </form>
           <form action={lockRun} className="i9-stack">

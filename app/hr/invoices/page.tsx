@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { db, requireHr } from "@/lib/i9/server";
-import { periodCompleteness } from "@/lib/invoices/server";
+import { autoSendEnabled, periodCompleteness } from "@/lib/invoices/server";
 import { money, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
-import { refreshDrafts } from "./actions";
+import { refreshDrafts, setAutoSend } from "./actions";
 import { SendButton } from "./forms";
 
 type Row = {
@@ -42,6 +42,7 @@ export default async function Invoices() {
     const p = d.stagity_people as unknown as { first_name: string; last_name: string; vendor_id: string | null; bill_rate: number | null };
     if (!p.vendor_id || p.bill_rate == null) missingSetup.set(d.person_id, `${p.first_name} ${p.last_name}`);
   }
+  const auto = await autoSendEnabled();
   const name = (r: Row) => `${r.stagity_people.first_name} ${r.stagity_people.last_name}`;
 
   return (
@@ -50,9 +51,22 @@ export default async function Invoices() {
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>
           <h1 className="h2">Vendor invoices</h1>
-          <p className="muted">Approving a timesheet adds its hours to a draft invoice. Check the draft, then Approve &amp; send. It&apos;s emailed to the vendor from {process.env.SMTP_USER ?? "your HR email"} with the PDF and the approved timesheets.</p>
+          <p className="muted">Approving a timesheet adds its hours to a draft invoice. Invoices are emailed to the vendor from {process.env.SMTP_USER ?? "your HR email"} with the PDF and the approved timesheets.</p>
         </div>
         <form action={refreshDrafts}><button className="btn btn-outline">Refresh drafts</button></form>
+      </div>
+
+      <div className={`form-status ${auto ? "ok" : ""}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: auto ? undefined : "var(--surface)" }}>
+        <span>
+          <strong>Automatic sending is {auto ? "on" : "off"}.</strong>{" "}
+          {auto
+            ? "Each morning, any invoice whose period is over and fully approved (e.g. a consultant's whole month) is sent to the vendor automatically."
+            : "Drafts wait for you to click Approve & send."}
+        </span>
+        <form action={setAutoSend}>
+          <input type="hidden" name="on" value={auto ? "false" : "true"} />
+          <button className="btn btn-outline" style={{ minHeight: 38, padding: "6px 16px", fontSize: 14 }}>{auto ? "Turn off" : "Turn on"}</button>
+        </form>
       </div>
 
       {missingSetup.size > 0 && (

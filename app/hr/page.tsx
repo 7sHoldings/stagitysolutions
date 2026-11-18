@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db, i9Configured, requireHr } from "@/lib/i9/server";
 import { addMonths, deadlineFor, monthLabel, monthStart, payDateFor, todayCT } from "@/lib/portal/dates";
-import { missingWeeks, monthOverview } from "@/lib/portal/timesheets";
+import { missingPeriods, monthOverview } from "@/lib/portal/timesheets";
 import HrNav from "./HrNav";
 
 function Tile({ n, label, href }: { n: number | string; label: string; href: string }) {
@@ -25,7 +25,7 @@ export default async function HrHome() {
   }
   const hr = await requireHr();
   const today = todayCT();
-  const month = Number(today.slice(8)) <= 5 ? addMonths(today, -1) : monthStart(today);
+  const month = Number(today.slice(8)) <= 20 ? addMonths(today, -1) : monthStart(today); // last month is being collected until payroll on the 20th
   const [{ count: i9Review }, { count: i9Waiting }, { count: tsReview }, overview, { data: run }, { count: invDrafts }] = await Promise.all([
     db().from("stagity_i9_cases").select("id", { count: "exact", head: true }).in("status", ["section1_complete", "section2_complete"]),
     db().from("stagity_i9_cases").select("id", { count: "exact", head: true }).eq("status", "invited"),
@@ -34,7 +34,7 @@ export default async function HrHome() {
     db().from("stagity_payroll_runs").select("id, status").eq("period_month", addMonths(monthStart(today), -1)).maybeSingle(),
     db().from("stagity_invoices").select("id", { count: "exact", head: true }).eq("status", "draft"),
   ]);
-  const missing = overview.consultants.filter((p) => p.active && missingWeeks(p, month, overview.sheet).length > 0).length;
+  const missing = overview.consultants.filter((p) => p.active && missingPeriods(p, month, overview.sheet).length > 0).length;
   const payMonth = addMonths(monthStart(today), -1);
 
   return (
@@ -44,7 +44,7 @@ export default async function HrHome() {
       <div className="i9-tiles">
         <Tile n={tsReview ?? 0} label="Timesheets to review" href="/hr/timesheets" />
         <Tile n={invDrafts ?? 0} label="Vendor invoices ready to send" href="/hr/invoices" />
-        <Tile n={missing} label={`Consultants missing ${monthLabel(month)} timesheets (due ${deadlineFor(month)})`} href={`/hr/timesheets?month=${month.slice(0, 7)}`} />
+        <Tile n={missing} label={`Consultants missing ${monthLabel(month)} timesheets (due ${deadlineFor(month)}, payroll ${payDateFor(month)})`} href={`/hr/timesheets?month=${month.slice(0, 7)}`} />
         <Tile n={i9Review ?? 0} label="Form I-9s needing HR action" href="/hr/i9" />
         <Tile n={i9Waiting ?? 0} label="Form I-9s waiting for the employee" href="/hr/i9" />
         <Tile

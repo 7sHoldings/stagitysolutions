@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { audit, db, requireHr, siteOrigin } from "@/lib/i9/server";
 import { sendTimesheetReminder, sendTimesheetReviewed } from "@/lib/portal/mail";
-import { deadlineFor, monthLabel, weekLabel } from "@/lib/portal/dates";
-import { missingWeeks, monthOverview } from "@/lib/portal/timesheets";
+import { deadlineFor, monthLabel, payDateFor, periodLabel, sheetLabel } from "@/lib/portal/dates";
+import { missingPeriods, monthOverview } from "@/lib/portal/timesheets";
 import type { ActionState } from "../actions";
 import { releaseTimesheet, syncDraftInvoices } from "@/lib/invoices/server";
 
@@ -33,7 +33,7 @@ export async function reviewTimesheet(_prev: ActionState, formData: FormData): P
     .eq("id", id);
   await audit(null, `hr:${hr}`, approved ? "timesheet_approved" : "timesheet_rejected", { timesheetId: id, note: note || null });
   const person = s.stagity_people as { first_name: string; email: string };
-  await sendTimesheetReviewed(person.email, person.first_name, weekLabel(s.week_start), approved, note, `${siteOrigin()}/portal/timesheets/${s.week_start}`);
+  await sendTimesheetReviewed(person.email, person.first_name, sheetLabel(s.week_start), approved, note, `${siteOrigin()}/portal/timesheets/${s.week_start}`);
   let invoiceNote = "";
   if (approved) {
     const reason = await syncDraftInvoices(s.person_id);
@@ -52,15 +52,15 @@ export async function remindConsultant(_prev: ActionState, formData: FormData): 
   const { consultants, sheet } = await monthOverview(month);
   const p = consultants.find((c) => c.id === personId);
   if (!p) return { error: "Not found." };
-  const weeks = missingWeeks(p, month, sheet);
+  const weeks = missingPeriods(p, month, sheet);
   if (!weeks.length) return { error: "Nothing is missing for this month." };
   const sent = await sendTimesheetReminder(
     p.email,
     p.first_name,
     `Reminder: timesheets for ${monthLabel(month)}`,
     [
-      `We're still missing your approved timesheets for: ${weeks.map(weekLabel).join(", ")}.`,
-      `Please enter your hours and upload the client-approved timesheets by ${deadlineFor(month)} so you're included in payroll.`,
+      `We're still missing your approved timesheets for: ${weeks.map(periodLabel).join(", ")}.`,
+      `Please fill in every weekday (0 for holidays or days off) and upload the client-approved timesheets. They were due ${deadlineFor(month)} and must be in before payroll on ${payDateFor(month)}.`,
     ],
     `${siteOrigin()}/portal`,
   );

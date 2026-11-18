@@ -3,15 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { getTimesheetUploadUrl, recordTimesheetFile, removeTimesheetFile, saveTimesheet } from "../actions";
-import { dayNames, shortDate } from "@/lib/portal/dates";
+import { dayName, isWeekend, shortDate } from "@/lib/portal/dates";
 
 type F = { id: string; name: string; url?: string };
 
-export default function TimesheetForm({ week, dates, initialHours, initialNotes, editable, initialFiles }: {
-  week: string; dates: string[]; initialHours: number[]; initialNotes: string; editable: boolean; initialFiles: F[];
+export default function TimesheetForm({ week, dates, initialHours, initialNotes, editable, initialFiles, employment, canSubmit }: {
+  week: string; dates: string[]; initialHours: (number | null)[]; initialNotes: string; editable: boolean; initialFiles: F[];
+  employment: { start: string | null; end: string | null }; canSubmit: boolean;
 }) {
+  const employed = (d: string) => (!employment.start || d >= employment.start) && (!employment.end || d <= employment.end);
   const router = useRouter();
-  const [hours, setHours] = useState(initialHours.map((h) => (h ? String(h) : "")));
+  const [hours, setHours] = useState(initialHours.map((h) => (h === null ? "" : String(h))));
   const [notes, setNotes] = useState(initialNotes);
   const [files, setFiles] = useState<F[]>(initialFiles);
   const [busy, setBusy] = useState(false);
@@ -46,7 +48,7 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
   function save(submit: boolean) {
     setMsg(null);
     start(async () => {
-      const r = await saveTimesheet(week, hours.map((h) => Number(h) || 0), notes, submit);
+      const r = await saveTimesheet(week, hours.map((h) => (h.trim() === "" ? null : Number(h))), notes, submit);
       if ("error" in r && r.error) setMsg({ text: r.error });
       else {
         setMsg({ ok: true, text: r.message ?? "Saved." });
@@ -59,13 +61,16 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
     <div className="i9-stack" style={{ gap: 24 }}>
       <div className="form-card">
         <h2 className="i9-h3">Hours worked</h2>
+        <p className="muted i9-small">Fill in every weekday. Enter 0 for holidays, PTO or days you didn&apos;t work. Weekends are optional.</p>
         <div className="i9-hours">
           {dates.map((d, i) => (
             <label key={d} className="field">
-              <span className="i9-day">{dayNames[i]}<span className="muted">{shortDate(d)}</span></span>
+              <span className="i9-day">{dayName(d)}<span className="muted">{shortDate(d)}</span></span>
               <input
-                type="number" inputMode="decimal" min={0} max={24} step={0.25} value={hours[i]} disabled={!editable}
-                onChange={(e) => setHours((h) => h.map((x, j) => (j === i ? e.target.value : x)))} placeholder="0"
+                type="number" inputMode="decimal" min={0} max={24} step={0.25} value={hours[i]} disabled={!editable || !employed(d)}
+                onChange={(e) => setHours((h) => h.map((x, j) => (j === i ? e.target.value : x)))}
+                placeholder={isWeekend(d) ? "–" : "Hours"}
+                className={!isWeekend(d) && employed(d) && hours[i].trim() === "" ? "i9-need" : ""}
               />
             </label>
           ))}
@@ -97,7 +102,7 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
       {msg && <p className={`form-status ${msg.ok ? "ok" : "err"}`} role="status">{msg.text}</p>}
       {editable && (
         <div className="btn-row">
-          <button type="button" className="btn btn-primary" disabled={pending || busy} onClick={() => save(true)}>
+          <button type="button" className="btn btn-primary" disabled={pending || busy || !canSubmit} onClick={() => save(true)} title={canSubmit ? undefined : "You can submit on the last weekday of this period"}>
             {pending ? "Saving…" : "Submit to HR"}
           </button>
           <button type="button" className="btn btn-outline" disabled={pending || busy} onClick={() => save(false)}>Save draft</button>

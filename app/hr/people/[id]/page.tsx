@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, requireHr } from "@/lib/i9/server";
 import { statusLabels } from "@/lib/i9/forms";
-import { weekLabel } from "@/lib/portal/dates";
+import { sheetLabel } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
 import { setActive } from "../actions";
 import { EditPersonForm, ResetPasswordForm, StartI9Form } from "../forms";
@@ -60,7 +60,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             <div className="i9-weeks">
               {sheets.map((s) => (
                 <Link key={s.id} href={`/hr/timesheets/${s.id}`} className="i9-week">
-                  <strong>{weekLabel(s.week_start)}</strong>
+                  <strong>{sheetLabel(s.week_start)}</strong>
                   <span className="i9-week-right"><span className="i9-small muted">{Number(s.total_hours)} h</span><span className={`i9-dot ${s.status}`}>{s.status}</span></span>
                 </Link>
               ))}

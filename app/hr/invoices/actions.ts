@@ -74,3 +74,11 @@ export async function refreshDrafts(): Promise<void> {
   await audit(null, `hr:${hr}`, "invoice_drafts_refreshed");
   refresh();
 }
+
+export async function setAutoSend(formData: FormData): Promise<void> {
+  const hr = await requireHr();
+  const on = formData.get("on") === "true";
+  await db().from("stagity_settings").upsert({ key: "invoice_auto_send", value: on ? "on" : "off", updated_at: new Date().toISOString(), updated_by: hr });
+  await audit(null, `hr:${hr}`, on ? "invoice_auto_send_on" : "invoice_auto_send_off");
+  refresh();
+}

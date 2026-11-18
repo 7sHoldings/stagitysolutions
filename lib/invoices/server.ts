@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/i9/server";
-import { addDays, monthEnd, monthStart, mondayOf, round2, todayCT } from "@/lib/portal/dates";
+import { addDays, monthEnd, monthStart, mondayOf, periodFor, round2, todayCT } from "@/lib/portal/dates";
 
 export type Vendor = {
   id: string; name: string; ap_email: string; cc_emails: string | null; address: string | null;
@@ -115,19 +115,27 @@ export async function releaseTimesheet(timesheetId: string): Promise<string | nu
   return null;
 }
 
-/** Expected vs approved weeks for a draft's period (so HR knows if a monthly invoice is complete). */
+/**
+ * Whether every timesheet period inside this invoice's period is approved and the period is over.
+ * Monthly invoices are complete when the consultant's whole month is approved.
+ */
 export async function periodCompleteness(inv: Pick<Invoice, "person_id" | "period_start" | "period_end">) {
   const { data: person } = await db().from("stagity_people").select("start_date, end_date").eq("id", inv.person_id).single();
   const today = todayCT();
-  const weeks: string[] = [];
-  for (let w = mondayOf(inv.period_start); w <= inv.period_end; w = addDays(w, 7)) {
-    if (w > mondayOf(today)) break;
-    if (person?.start_date && addDays(w, 6) < person.start_date) continue;
-    if (person?.end_date && w > person.end_date) continue;
-    weeks.push(w);
+  const owed: string[] = [];
+  for (let d = inv.period_start; d <= inv.period_end; d = addDays(periodFor(d).end, 1)) {
+    const p = periodFor(d);
+    if (p.start > today) break;
+    if (person?.start_date && p.end < person.start_date) continue;
+    if (person?.end_date && p.start > person.end_date) continue;
+    owed.push(p.start);
   }
-  const { data: sheets } = await db().from("stagity_timesheets").select("week_start, status").eq("person_id", inv.person_id).in("week_start", weeks.length ? weeks : ["1900-01-01"]);
-  const approved = weeks.filter((w) => sheets?.some((s) => s.week_start === w && s.status === "approved")).length;
-  const periodOver = inv.period_end < today;
-  return { expected: weeks.length, approved, complete: periodOver && approved === weeks.length };
+  const { data: sheets } = await db().from("stagity_timesheets").select("week_start, status").eq("person_id", inv.person_id).in("week_start", owed.length ? owed : ["1900-01-01"]);
+  const approved = owed.filter((w) => sheets?.some((s) => s.week_start === w && s.status === "approved")).length;
+  return { expected: owed.length, approved, complete: inv.period_end < today && approved === owed.length };
+}
+
+/** Auto-send is on unless HR turned it off on the Invoices page. */
+export async function autoSendEnabled() {
+  return (await getSetting("invoice_auto_send")) !== "off";
 }

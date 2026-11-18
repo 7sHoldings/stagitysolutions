@@ -71,3 +71,53 @@ export function splitOvertime(hours: number[]): { regular: number; overtime: num
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 export const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+// ---------- Timesheet periods ----------
+// A timesheet covers one Mon–Sun week, split at month boundaries, so every month's hours can be
+// finished and approved on their own (e.g. Mon Aug 31 is its own period; Sep 1–6 is the next).
+
+export type Period = { start: string; end: string };
+
+/** The timesheet period that contains a date. */
+export function periodFor(d: string): Period {
+  const mon = mondayOf(d);
+  const ms = monthStart(d);
+  const me = monthEnd(d);
+  const sun = addDays(mon, 6);
+  return { start: mon > ms ? mon : ms, end: sun < me ? sun : me };
+}
+
+/** True if d is the first day of a timesheet period. */
+export const isPeriodStart = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) && periodFor(d).start === d;
+
+/** All timesheet periods in a month, in order. */
+export function periodsInMonth(month: string): Period[] {
+  const out: Period[] = [];
+  for (let d = monthStart(month); d <= monthEnd(month); d = addDays(periodFor(d).end, 1)) out.push(periodFor(d));
+  return out;
+}
+
+export function datesBetween(start: string, end: string): string[] {
+  const out: string[] = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+export const isWeekend = (d: string) => [0, 6].includes(new Date(d + "T00:00:00Z").getUTCDay());
+export const dayName = (d: string) => dayNames[(new Date(d + "T00:00:00Z").getUTCDay() + 6) % 7];
+
+export function periodLabel(p: Period) {
+  return p.start === p.end ? shortDate(p.start) : `${shortDate(p.start)} – ${shortDate(p.end)}`;
+}
+
+/** Last day to submit a month's timesheets without being late (the 5th of the next month). */
+export const submitDeadline = deadlineFor;
+
+/** Last weekday (Mon–Fri) in a period; consultants can submit from this day on. Falls back to the period end. */
+export function submitFrom(p: Period): string {
+  for (let d = p.end; d >= p.start; d = addDays(d, -1)) if (!isWeekend(d)) return d;
+  return p.end;
+}
+
+/** Label for a timesheet by its start date, e.g. "Aug 31" or "Sep 1 – Sep 6". */
+export const sheetLabel = (start: string) => periodLabel(periodFor(start));

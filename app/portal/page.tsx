@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/i9/server";
 import { requirePerson } from "@/lib/portal/server";
-import { addDays, deadlineFor, monthLabel, monthStart, mondayOf, todayCT, weekLabel } from "@/lib/portal/dates";
+import { addDays, addMonths, deadlineFor, monthLabel, monthStart, payDateFor, periodLabel, periodsInMonth, todayCT, type Period } from "@/lib/portal/dates";
 import { signOutPortal } from "./actions";
 
 const tsLabel: Record<string, string> = { draft: "Draft", submitted: "Submitted", approved: "Approved", rejected: "Needs changes" };
@@ -19,18 +19,18 @@ export default async function PortalHome() {
     .limit(1)
     .maybeSingle();
 
-  let weeks: string[] = [];
+  // Timesheet periods for this month and the two before it (newest first), within employment.
+  let periods: Period[] = [];
   const sheets = new Map<string, { status: string; total_hours: number; review_note: string | null }>();
   if (p.kind === "consultant") {
-    const current = mondayOf(today);
-    const earliest = p.start_date ? mondayOf(p.start_date) : addDays(current, -7 * 7);
-    const from = earliest > addDays(current, -7 * 11) ? earliest : addDays(current, -7 * 11);
-    for (let w = current; w >= from; w = addDays(w, -7)) weeks.push(w);
-    const { data } = await db().from("stagity_timesheets").select("week_start, status, total_hours, review_note").eq("person_id", p.id).gte("week_start", from);
+    const months = [monthStart(today), addMonths(today, -1), addMonths(today, -2)];
+    periods = months
+      .flatMap((m) => periodsInMonth(m).reverse())
+      .filter((x) => x.start <= today && (!p.start_date || x.end >= p.start_date) && (!p.end_date || x.start <= p.end_date));
+    const { data } = await db().from("stagity_timesheets").select("week_start, status, total_hours, review_note").eq("person_id", p.id).gte("week_start", months[2]);
     data?.forEach((s) => sheets.set(s.week_start, s));
-    weeks = weeks.filter((w) => !p.end_date || w <= p.end_date);
   }
-  const closingMonth = Number(today.slice(8)) <= 5 ? monthStart(addDays(monthStart(today), -1)) : monthStart(today);
+  const closingMonth = Number(today.slice(8)) <= 20 ? addMonths(today, -1) : monthStart(today);
 
   return (
     <section className="container i9-page" style={{ maxWidth: 880 }}>
@@ -56,18 +56,19 @@ export default async function PortalHome() {
         <div className="i9-card">
           <h2 className="i9-h3">Weekly timesheets</h2>
           <p className="muted i9-small">
-            Each week, enter your hours and upload the timesheet your client approved in their portal. Approved timesheets for{" "}
-            {monthLabel(closingMonth)} are due by <strong>{deadlineFor(closingMonth)}</strong>.
-            {p.client_name ? ` Client: ${p.client_name}.` : ""}
+            Each week, enter your hours for every weekday (0 for holidays or days off) and upload the timesheet your client approved.
+            Weeks that cross into a new month are split, so each month can be finished on its own. {monthLabel(closingMonth)} timesheets
+            are due by <strong>{deadlineFor(closingMonth)}</strong> and must be in before payroll on {payDateFor(closingMonth)}.
           </p>
           <div className="i9-weeks">
-            {weeks.map((w) => {
+            {periods.map((x) => {
+              const w = x.start;
               const s = sheets.get(w);
               const status = s?.status ?? "missing";
               return (
                 <Link key={w} href={`/portal/timesheets/${w}`} className="i9-week">
                   <span>
-                    <strong>{weekLabel(w)}</strong>
+                    <strong>{periodLabel(x)}</strong>
                     {s?.status === "rejected" && s.review_note && <span className="i9-small muted"> · {s.review_note}</span>}
                   </span>
                   <span className="i9-week-right">

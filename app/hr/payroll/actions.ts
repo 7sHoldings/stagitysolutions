@@ -35,10 +35,8 @@ export async function recalculate(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const run = await draftRun(id);
   if (!run) return;
-  const includeLate = formData.get("includeLate") === "on";
-  await db().from("stagity_payroll_runs").update({ include_late: includeLate }).eq("id", id);
-  await rebuildItems({ ...run, include_late: includeLate });
-  await audit(null, `hr:${hr}`, "payroll_recalculated", { runId: id, includeLate });
+  await rebuildItems(run);
+  await audit(null, `hr:${hr}`, "payroll_recalculated", { runId: id });
   revalidatePath(`/hr/payroll/${id}`);
 }
 

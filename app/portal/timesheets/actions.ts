@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { audit, db } from "@/lib/i9/server";
 import { portalPerson } from "@/lib/portal/server";
-import { addDays, mondayOf, round2, splitOvertime, todayCT, weekDates } from "@/lib/portal/dates";
+import { datesBetween, isPeriodStart, isWeekend, periodFor, round2, submitFrom, todayCT } from "@/lib/portal/dates";
+import { recomputeWeekOvertime } from "@/lib/portal/timesheets";
 
 import { TS_BUCKET } from "@/lib/portal/server";
 const MIME_EXT: Record<string, string> = {
@@ -18,9 +19,9 @@ async function me() {
 }
 
 function validWeek(week: string, start: string | null) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || mondayOf(week) !== week) return false;
-  if (week > mondayOf(todayCT())) return false; // no future weeks
-  if (start && addDays(week, 6) < start) return false; // before they started
+  if (!isPeriodStart(week)) return false;
+  if (week > todayCT()) return false; // no future periods
+  if (start && periodFor(week).end < start) return false; // before they started
   return true;
 }
 
@@ -32,29 +33,44 @@ async function editableSheet(personId: string, week: string) {
   return data;
 }
 
-export async function saveTimesheet(week: string, rawHours: number[], notes: string, submit: boolean) {
+/**
+ * hours: one entry per date in the period; null = left blank.
+ * To submit, every weekday the consultant was employed must be filled in (0 for holidays or days off).
+ */
+export async function saveTimesheet(week: string, rawHours: (number | null)[], notes: string, submit: boolean) {
   const p = await me();
   if (!p) return { error: "Please sign in again." };
-  if (!validWeek(week, p.start_date)) return { error: "You can't enter time for that week." };
-  const hours = weekDates(week).map((_, i) => round2(Math.min(24, Math.max(0, Number(rawHours[i]) || 0))));
+  if (!validWeek(week, p.start_date)) return { error: "You can't enter time for that period." };
+  const period = periodFor(week);
+  const dates = datesBetween(period.start, period.end);
   const sheet = await editableSheet(p.id, week);
   if (!sheet) return { error: "This timesheet has already been submitted." };
-  const total = round2(hours.reduce((a, b) => a + b, 0));
+
+  const employed = (d: string) => (!p.start_date || d >= p.start_date) && (!p.end_date || d <= p.end_date);
+  const hours = dates.map((_, i) => {
+    const h = rawHours[i];
+    return h === null || h === undefined || Number.isNaN(Number(h)) ? null : round2(Math.min(24, Math.max(0, Number(h))));
+  });
+  const total = round2(hours.reduce<number>((a, b) => a + (b ?? 0), 0));
 
   if (submit) {
+    if (submitFrom(period) > todayCT()) return { error: `You can submit this timesheet from ${submitFrom(period)}.` };
+    const blank = dates.filter((d, i) => !isWeekend(d) && employed(d) && hours[i] === null);
+    if (blank.length) return { error: "Fill in every weekday. Enter 0 for holidays or days you didn't work." };
     const { count } = await db().from("stagity_timesheet_files").select("id", { count: "exact", head: true }).eq("timesheet_id", sheet.id);
     if (total > 0 && !count) return { error: "Upload your client-approved timesheet before submitting." };
   }
 
-  const split = splitOvertime(hours);
   await db().from("stagity_timesheet_days").delete().eq("timesheet_id", sheet.id);
-  const days = weekDates(week)
-    .map((d, i) => ({ timesheet_id: sheet.id, person_id: p.id, work_date: d, hours: hours[i], regular_hours: split[i].regular, overtime_hours: split[i].overtime }))
-    .filter((d) => d.hours > 0);
+  const days = dates
+    .map((d, i) => ({ timesheet_id: sheet.id, person_id: p.id, work_date: d, hours: hours[i] }))
+    .filter((d) => d.hours !== null)
+    .map((d) => ({ ...d, hours: d.hours as number, regular_hours: d.hours as number, overtime_hours: 0 }));
   if (days.length) {
     const { error } = await db().from("stagity_timesheet_days").insert(days);
     if (error) return { error: "Couldn't save your hours. Please try again." };
   }
+  await recomputeWeekOvertime(p.id, period.start);
   await db()
     .from("stagity_timesheets")
     .update({
@@ -64,7 +80,7 @@ export async function saveTimesheet(week: string, rawHours: number[], notes: str
       ...(submit ? { status: "submitted", submitted_at: new Date().toISOString(), review_note: null } : {}),
     })
     .eq("id", sheet.id);
-  if (submit) await audit(null, `person:${p.id}`, "timesheet_submitted", { week, total });
+  if (submit) await audit(null, `person:${p.id}`, "timesheet_submitted", { period: week, total });
   revalidatePath("/portal");
   return { ok: true, message: submit ? "Submitted. HR will review it." : "Saved as draft." };
 }

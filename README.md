@@ -59,15 +59,18 @@ completes and signs Section 2, then records the E-Verify case number and result.
 (`lib/i9/assets/i-9.pdf`, edition 01/20/25, expires 05/31/2027) and appends the document copies. When USCIS publishes a new edition, replace
 that file and re-check the field names in `lib/i9/pdf.ts`.
 
-**Timesheets.** Consultants enter hours per day for each week (Mon–Sun) and upload the timesheet their client approved in the client portal.
-HR approves or sends back with a note. Overtime (over 40 h/week) is calculated automatically.
+**Timesheets.** Consultants enter hours for every weekday (0 for holidays/days off; weekends optional) and upload the timesheet their client
+approved. Timesheets cover a Mon–Sun week **split at month end** (e.g. Mon Aug 31 is its own period, Sep 1–6 the next), so each month can be
+completed on its own. HR approves or sends back with a note. Overtime (over 40 h per Mon–Sun workweek, across a split) is calculated automatically.
 
 | Rule | Value |
 | --- | --- |
 | Approved timesheets for a month are due | 5th of the next month |
 | Payroll for that month is paid | 20th of the next month |
-| Late timesheets | roll into the next month's payroll (HR can include them) |
-| Reminders (daily cron, `vercel.json`) | Fridays; 25th, 28th, last day; 1st, 3rd, 5th; HR digest on the 6th |
+| Late timesheets | accepted until payroll is locked (before the 20th); approved after that → next month's payroll |
+| Reminders (daily cron, `vercel.json`) | Fridays; 25th, 28th, last day; 1st, 3rd, 5th; overdue on 8th, 12th, 15th; HR summary on the 6th and 16th |
+| Vendor invoices | sent automatically each morning once a consultant's period (usually the month) is over and fully approved (can be turned off) |
+| Payroll sheet | draft refreshed and emailed to HR with the ADP RUN file on the 16th and 19th |
 
 **Payroll.** HR calculates the month's payroll (approved hours × rate, overtime × 1.5), adds bonuses or reimbursements, locks it (hours are
 marked paid so they can't be paid twice) and downloads the CSV for **ADP RUN** import. ADP calculates taxes, deductions and net pay.

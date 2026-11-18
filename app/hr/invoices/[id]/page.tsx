@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { db, requireHr } from "@/lib/i9/server";
 import { periodCompleteness } from "@/lib/invoices/server";
 import { loadInvoice } from "@/lib/invoices/send";
-import { money, shortDate, todayCT, weekLabel } from "@/lib/portal/dates";
+import { money, sheetLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
 import { DraftEditForm, PaidForm, SendButton, VoidForm } from "../forms";
 
@@ -69,7 +69,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         )}
         <div className="i9-weeks">
           {[...weeks].sort().map(([w, x]) => (
-            <Link key={w} href={`/hr/timesheets/${x.id}`} className="i9-week"><strong>{weekLabel(w)}</strong><span className="i9-small muted">{x.hours} h in this period</span></Link>
+            <Link key={w} href={`/hr/timesheets/${x.id}`} className="i9-week"><strong>{sheetLabel(w)}</strong><span className="i9-small muted">{x.hours} h in this period</span></Link>
           ))}
         </div>
       </div>
