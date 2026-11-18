@@ -691,3 +691,10 @@ a.grid-cell:hover { background: rgba(255,255,255,.04); color: #fff; }
 .inv-cell.progress { background: var(--surface); color: var(--muted); }
 a.inv-cell:hover { outline: 2px solid currentColor; outline-offset: -2px; }
 @media (max-width: 860px) { .hr-summary.hr-summary-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.inv-month-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.inv-status { display: inline-block; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.inv-status.paid { background: #e3f4e8; color: #14532d; }
+.inv-status.sent { background: var(--accent-soft); color: var(--accent-hover); }
+.inv-status.overdue, .inv-status.missing { background: #fde8e8; color: #991b1b; }
+.inv-status.draft { background: #fff4e5; color: #8a4b00; }
+.inv-status.progress { background: var(--surface); color: var(--muted); }

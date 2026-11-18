@@ -13,11 +13,11 @@ type Row = {
   stagity_vendors: { name: string };
 };
 
-const shortMonth = (m: string) => new Date(m + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
-export default async function Invoices() {
+export default async function Invoices({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const hr = await requireHr();
   const today = todayCT();
+  const q = (await searchParams).month;
   const [{ data }, { data: consultants }] = await Promise.all([
     db()
       .from("stagity_invoices")
@@ -39,24 +39,30 @@ export default async function Invoices() {
   const awaiting = sent.reduce((a, r) => a + Number(r.total), 0);
   const overdue = sent.filter((r) => r.due_date && r.due_date < today);
 
-  // ---- By month: which consultant was invoiced for which month ----
+  // ---- One month at a time: was each consultant invoiced? ----
   const thisMonth = monthStart(today);
-  const months = [-3, -2, -1, 0].map((n) => addMonths(thisMonth, n));
+  const month = q && /^\d{4}-\d{2}$/.test(q) ? `${q}-01` : addMonths(thisMonth, -1); // default: last month
   const overlaps = (r: Row, m: string) => r.period_start <= monthEnd(m) && r.period_end >= m;
-  const people = (consultants ?? []).filter((p) => p.active || rows.some((r) => r.person_id === p.id));
-  type Cell = { kind: "sent" | "paid" | "draft" | "missing" | "progress" | "na"; invoices: Row[] };
-  const cellFor = (p: (typeof people)[number], m: string): Cell => {
-    const employed = (!p.start_date || p.start_date <= monthEnd(m)) && (!p.end_date || p.end_date >= m);
-    const invs = rows.filter((r) => r.person_id === p.id && overlaps(r, m));
+  type Status = "paid" | "sent" | "overdue" | "draft" | "missing" | "progress";
+  const people = (consultants ?? []).filter((p) => {
+    const employed = (!p.start_date || p.start_date <= monthEnd(month)) && (!p.end_date || p.end_date >= month);
+    return (employed && p.active) || rows.some((r) => r.person_id === p.id && overlaps(r, month));
+  });
+  const list = people.map((p) => {
+    const invs = rows.filter((r) => r.person_id === p.id && overlaps(r, month));
     const done = invs.filter((r) => r.status !== "draft");
-    if (done.length) return { kind: done.every((r) => r.status === "paid") ? "paid" : "sent", invoices: done };
-    if (!employed) return { kind: "na", invoices: [] };
-    if (monthEnd(m) >= today) return { kind: "progress", invoices: invs };
-    if (invs.length) return { kind: "draft", invoices: invs };
-    return { kind: "missing", invoices: [] };
-  };
-  const grid = people.map((p) => ({ p, cells: months.map((m) => cellFor(p, m)) }));
-  const notInvoiced = grid.reduce((a, g) => a + g.cells.filter((c) => c.kind === "missing" || c.kind === "draft").length, 0);
+    const draft = invs.find((r) => r.status === "draft") ?? null;
+    let status: Status;
+    if (done.length) status = done.every((r) => r.status === "paid") ? "paid" : done.some((r) => r.status === "sent" && r.due_date && r.due_date < today) ? "overdue" : "sent";
+    else if (monthEnd(month) >= today) status = "progress";
+    else status = draft ? "draft" : "missing";
+    return { p, done, draft, status };
+  });
+  const order: Record<Status, number> = { missing: 0, draft: 1, overdue: 2, sent: 3, progress: 4, paid: 5 };
+  list.sort((a, b) => order[a.status] - order[b.status] || a.p.last_name.localeCompare(b.p.last_name));
+  const monthNotInvoiced = list.filter((x) => x.status === "missing" || x.status === "draft").length;
+  const monthTotal = list.reduce((a, x) => a + x.done.reduce((t, r) => t + Number(r.total), 0), 0);
+  const ym = (m: string) => m.slice(0, 7);
 
   // Approved hours that can't be invoiced because the consultant has no vendor or bill rate.
   const { data: loose } = await db()
@@ -109,66 +115,63 @@ export default async function Invoices() {
       )}
 
       <div className="hr-summary hr-summary-4">
-        <div><span className="hr-sum-n" style={{ color: notInvoiced ? "#b91c1c" : undefined }}>{notInvoiced}</span><span className="muted i9-small">Months not invoiced</span></div>
+        <div><span className="hr-sum-n" style={{ color: monthNotInvoiced ? "#b91c1c" : undefined }}>{monthNotInvoiced}</span><span className="muted i9-small">Not invoiced in {monthLabel(month)}</span></div>
         <div><span className="hr-sum-n">{drafts.length}</span><span className="muted i9-small">Drafts to review</span></div>
         <div><span className="hr-sum-n">{money(awaiting)}</span><span className="muted i9-small">Awaiting payment ({sent.length} sent)</span></div>
         <div><span className="hr-sum-n" style={{ color: overdue.length ? "#b91c1c" : undefined }}>{overdue.length}</span><span className="muted i9-small">Overdue</span></div>
       </div>
 
-      {/* By month */}
+      {/* One month at a time */}
       <div className="hr-panel">
-        <div className="hr-panel-head">
-          <h2 className="i9-h3">By month</h2>
-          <span className="muted i9-small">Which consultants were invoiced for each month</span>
+        <div className="inv-month-head">
+          <div>
+            <h2 className="i9-h3">Invoices for {monthLabel(month)}</h2>
+            <p className="muted i9-small">
+              {list.length} consultant{list.length === 1 ? "" : "s"} · {money(monthTotal)} invoiced
+              {monthNotInvoiced ? <> · <strong style={{ color: "#b91c1c" }}>{monthNotInvoiced} not invoiced</strong></> : null}
+            </p>
+          </div>
+          <div className="hr-month-nav">
+            <Link className="btn btn-outline hr-btn-sm" href={`/hr/invoices?month=${ym(addMonths(month, -1))}`} aria-label="Previous month">←</Link>
+            <span className="hr-month-name">{monthLabel(month)}</span>
+            <Link className="btn btn-outline hr-btn-sm" href={`/hr/invoices?month=${ym(addMonths(month, 1))}`} aria-label="Next month">→</Link>
+          </div>
         </div>
         <div className="i9-table-wrap">
-          <table className="i9-table inv-grid">
-            <thead>
-              <tr>
-                <th>Consultant</th>
-                {months.map((m) => <th key={m}>{shortMonth(m)}</th>)}
-              </tr>
-            </thead>
+          <table className="i9-table">
+            <thead><tr><th>Consultant</th><th>Vendor</th><th className="i9-num">Hours</th><th className="i9-num">Amount</th><th>Invoice</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {grid.map(({ p, cells }) => (
-                <tr key={p.id}>
-                  <td>
-                    <Link href={`/hr/people/${p.id}`}><strong>{p.first_name} {p.last_name}</strong></Link>
-                    <div className="muted i9-small">{(p.stagity_vendors as unknown as { name: string } | null)?.name ?? "No vendor"}</div>
-                  </td>
-                  {cells.map((c, i) => (
-                    <td key={months[i]}>
-                      {c.kind === "sent" || c.kind === "paid" ? (
-                        c.invoices.map((r) => (
-                          <Link key={r.id} href={`/hr/invoices/${r.id}`} className={`inv-cell ${r.status}`}>
-                            <strong>{money(Number(r.total))}</strong>
-                            <span>#{r.number} · {r.status === "paid" ? "Paid" : r.due_date && r.due_date < today ? "Overdue" : "Sent"}</span>
-                          </Link>
-                        ))
-                      ) : c.kind === "draft" ? (
-                        <Link href={`/hr/invoices/${c.invoices[0].id}`} className="inv-cell draft">
-                          <strong>{money(Number(c.invoices[0].total))}</strong>
-                          <span>Draft · not sent</span>
-                        </Link>
-                      ) : c.kind === "missing" ? (
-                        <Link href={`/hr/timesheets?month=${months[i].slice(0, 7)}`} className="inv-cell missing">
-                          <strong>Not invoiced</strong>
-                          <span>Check timesheets</span>
-                        </Link>
-                      ) : c.kind === "progress" ? (
-                        <span className="inv-cell progress"><strong>In progress</strong><span>{c.invoices.length ? `Draft ${money(Number(c.invoices[0].total))}` : "Month not over"}</span></span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
+              {list.map(({ p, done, draft, status }) => {
+                const inv = done[0] ?? draft;
+                const hours = (done.length ? done : draft ? [draft] : []).reduce((a, r) => a + Number(r.regular_hours) + Number(r.overtime_hours), 0);
+                const amount = (done.length ? done : draft ? [draft] : []).reduce((a, r) => a + Number(r.total), 0);
+                return (
+                  <tr key={p.id}>
+                    <td><Link href={`/hr/people/${p.id}`}><strong>{p.first_name} {p.last_name}</strong></Link></td>
+                    <td>{(p.stagity_vendors as unknown as { name: string } | null)?.name ?? <span className="muted">No vendor</span>}</td>
+                    <td className="i9-num">{inv ? hours : "—"}</td>
+                    <td className="i9-num">{inv ? <strong>{money(amount)}</strong> : "—"}</td>
+                    <td>{done.length ? done.map((r) => <div key={r.id}><Link href={`/hr/invoices/${r.id}`}>#{r.number}</Link>{r.sent_at ? <span className="muted i9-small"> · sent {shortDate(todayCT(new Date(r.sent_at)))}</span> : null}</div>) : <span className="muted">—</span>}</td>
+                    <td><span className={`inv-status ${status}`}>{{ paid: "Paid", sent: "Sent", overdue: "Overdue", draft: "Draft, not sent", missing: "Not invoiced", progress: "In progress" }[status]}</span></td>
+                    <td className="hr-td-actions">
+                      {status === "missing" ? (
+                        <Link className="btn btn-outline hr-btn-xs" href={`/hr/timesheets?month=${ym(month)}`}>Check timesheets</Link>
+                      ) : draft && !done.length ? (
+                        <div className="btn-row" style={{ justifyContent: "flex-end" }}>
+                          <a className="btn btn-outline hr-btn-xs" href={`/hr/invoices/${draft.id}/pdf`} target="_blank" rel="noreferrer">Preview</a>
+                          {status === "draft" && <SendButton id={draft.id} label="Send" vendor={draft.stagity_vendors.name} total={money(Number(draft.total))} />}
+                        </div>
+                      ) : inv ? (
+                        <Link className="btn btn-outline hr-btn-xs" href={`/hr/invoices/${inv.id}`}>Open</Link>
+                      ) : null}
                     </td>
-                  ))}
-                </tr>
-              ))}
-              {!grid.length && <tr><td colSpan={months.length + 1} className="muted">No consultants yet.</td></tr>}
+                  </tr>
+                );
+              })}
+              {!list.length && <tr><td colSpan={7} className="muted">No consultants were working in {monthLabel(month)}.</td></tr>}
             </tbody>
           </table>
         </div>
-        <p className="muted i9-small">“Not invoiced” means the month is over and nothing was sent for that consultant, usually because timesheets aren&apos;t all approved yet.</p>
       </div>
 
       {/* Drafts */}
