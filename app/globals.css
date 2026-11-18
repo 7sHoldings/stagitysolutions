@@ -643,3 +643,35 @@ a.grid-cell:hover { background: rgba(255,255,255,.04); color: #fff; }
 .ts-day.weekend .ts-day-value { color: var(--muted); font-weight: 400; }
 .ts-notes-ro { font-weight: 400; color: var(--body); font-size: 15px; white-space: pre-wrap; }
 .ts-back { margin-bottom: 14px; font-size: 15px; font-weight: 600; }
+
+/* Quick review queue */
+.rv-queue { display: flex; flex-direction: column; gap: 12px; background: #f5f8ff; border: 1px solid #cfdcff; border-radius: 22px; padding: 20px; }
+.rv-queue-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 4px; }
+.rv-card { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 16px; align-items: center; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.rv-card.done { display: flex; justify-content: space-between; gap: 12px; color: var(--body); }
+.rv-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rv-days { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rv-day { font-size: 13px; background: var(--surface); border-radius: 8px; padding: 3px 8px; font-variant-numeric: tabular-nums; }
+.rv-total { font-weight: 700; margin-left: 4px; }
+.rv-note { margin: 0; }
+.rv-files { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 260px; }
+.rv-thumb { width: 64px; height: 64px; border-radius: 10px; border: 1px solid var(--line-strong); padding: 0; overflow: hidden; background: var(--surface); cursor: zoom-in; display: grid; place-items: center; }
+.rv-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.rv-thumb:hover { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.rv-pdf-chip { font-size: 12px; font-weight: 700; color: #b91c1c; }
+.rv-nofile { font-size: 13px; color: #b45309; font-weight: 600; }
+.rv-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.rv-approve { background: #16a34a; color: #fff; border: 1px solid #16a34a; min-height: 40px; padding: 8px 16px; font-size: 14.5px; }
+.rv-approve:hover { background: #15803d; color: #fff; }
+.rv-reject { background: #fff; color: #b91c1c; border: 1px solid #f3c4c4; min-height: 40px; padding: 8px 16px; font-size: 14.5px; }
+.rv-reject:hover { background: #fde8e8; color: #991b1b; }
+.rv-viewer { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.rv-img { max-width: 100%; max-height: 65vh; border-radius: 12px; border: 1px solid var(--line); }
+.rv-pdf { width: 100%; height: 65vh; border: 1px solid var(--line); border-radius: 12px; }
+.rv-viewer-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .rv-card { grid-template-columns: 1fr; }
+  .rv-files { justify-content: flex-start; max-width: none; }
+  .rv-actions { justify-content: flex-start; }
+  .rv-approve, .rv-reject { flex: 1; }
+}

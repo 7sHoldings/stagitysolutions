@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { db, requireHr } from "@/lib/i9/server";
-import { addMonths, deadlineFor, monthEnd, monthLabel, monthStart, payDateFor, periodLabel, shortDate, todayCT } from "@/lib/portal/dates";
+import { addMonths, dayName, deadlineFor, isWeekend, monthEnd, monthLabel, monthStart, payDateFor, periodFor, periodLabel, shortDate, todayCT } from "@/lib/portal/dates";
+import { TS_BUCKET } from "@/lib/portal/server";
 import { expectedPeriods, missingPeriods, monthOverview } from "@/lib/portal/timesheets";
 import HrNav from "../HrNav";
-import { RemindAllButton, RemindButton } from "./forms";
+import { RemindAllButton, RemindButton, ReviewQueue, type ReviewItem } from "./forms";
 
 export default async function HrTimesheets({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
   const hr = await requireHr();
@@ -33,6 +34,38 @@ export default async function HrTimesheets({ searchParams }: { searchParams: Pro
     return { p, owed, missing, approved, complete: monthEnd(month) < today && approved === owed.length };
   });
   const needReminder = rows.filter((r) => r.p.active && r.missing.length);
+
+  // Review queue: every submitted timesheet (any month), with hours per day and the uploaded files.
+  const { data: pending } = await db()
+    .from("stagity_timesheets")
+    .select("id, week_start, total_hours, notes, submitted_at, stagity_people(first_name, last_name)")
+    .eq("status", "submitted")
+    .order("week_start");
+  const pendingIds = (pending ?? []).map((t) => t.id);
+  const none = ["00000000-0000-0000-0000-000000000000"];
+  const [{ data: pDays }, { data: pFiles }] = await Promise.all([
+    db().from("stagity_timesheet_days").select("timesheet_id, work_date, hours").in("timesheet_id", pendingIds.length ? pendingIds : none).order("work_date"),
+    db().from("stagity_timesheet_files").select("timesheet_id, storage_path, original_name, mime_type").in("timesheet_id", pendingIds.length ? pendingIds : none).order("uploaded_at"),
+  ]);
+  const signed = new Map<string, string>();
+  if (pFiles?.length) {
+    const { data } = await db().storage.from(TS_BUCKET).createSignedUrls(pFiles.map((f) => f.storage_path), 3600);
+    data?.forEach((x) => x.path && x.signedUrl && signed.set(x.path, x.signedUrl));
+  }
+  const queue: ReviewItem[] = (pending ?? []).map((t) => {
+    const person = t.stagity_people as unknown as { first_name: string; last_name: string };
+    const per = periodFor(t.week_start);
+    return {
+      id: t.id,
+      name: `${person.first_name} ${person.last_name}`,
+      label: periodLabel(per),
+      total: Number(t.total_hours),
+      late: !!t.submitted_at && todayCT(new Date(t.submitted_at)) > deadlineFor(per.start),
+      notes: t.notes,
+      days: (pDays ?? []).filter((d) => d.timesheet_id === t.id && !isWeekend(d.work_date)).map((d) => ({ day: `${dayName(d.work_date)} ${shortDate(d.work_date).replace(/^\w+ /, "")}`, hours: Number(d.hours) })),
+      files: (pFiles ?? []).filter((f) => f.timesheet_id === t.id).map((f) => ({ name: f.original_name ?? "file", url: signed.get(f.storage_path) ?? null, mime: f.mime_type })),
+    };
+  });
   const completeCount = rows.filter((r) => r.complete).length;
 
   return (
@@ -51,6 +84,8 @@ export default async function HrTimesheets({ searchParams }: { searchParams: Pro
           <Link className="btn btn-outline hr-btn-sm" href={`/hr/timesheets?month=${ym(addMonths(month, 1))}`} aria-label="Next month">→</Link>
         </div>
       </div>
+
+      <ReviewQueue items={queue} />
 
       <div className="hr-summary">
         <div><span className="hr-sum-n">{consultants.length}</span><span className="muted i9-small">consultants</span></div>
