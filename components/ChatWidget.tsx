@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { faqs, faqCategories, popularFaqs, type Faq, type FaqCategory } from "@/lib/faq";
@@ -28,6 +29,7 @@ const welcome = (): Msg[] => [
 ];
 
 export default function ChatWidget() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -113,6 +115,9 @@ export default function ChatWidget() {
       intro: "Sure — leave your details and our team will get back to you within one business day.",
     });
   };
+
+  // Keep the public chat assistant off the private HR and Form I-9 pages.
+  if (pathname?.startsWith("/hr") || pathname?.startsWith("/i9/")) return null;
 
   return (
     <>

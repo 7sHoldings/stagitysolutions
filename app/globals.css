@@ -338,3 +338,63 @@ a.grid-cell:hover { background: rgba(255,255,255,.04); color: #fff; }
   .fact-value { font-size: 22px; }
   .num-row .num-title { font-size: 23px; }
 }
+
+/* ---------- HR portal & remote Form I-9 ---------- */
+.i9-page { padding-top: 56px; padding-bottom: 96px; display: flex; flex-direction: column; gap: 32px; }
+.i9 fieldset { border: 0; margin: 0; min-width: 0; }
+.i9 legend { padding: 0; margin-bottom: 4px; }
+.i9-h3 { font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -0.015em; }
+.i9-small { font-size: 13.5px; line-height: 1.5; }
+.i9-stack { display: flex; flex-direction: column; gap: 14px; }
+.i9-card { border: 1px solid var(--line); border-radius: 24px; padding: 32px; display: flex; flex-direction: column; gap: 16px; }
+.i9-fieldset { border: 1px solid var(--line) !important; border-radius: 16px; padding: 20px !important; display: flex; flex-direction: column; gap: 14px; background: #fff; }
+.i9-fieldset legend { font-weight: 600; font-size: 15px; padding: 0 6px; }
+.i9-check { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; line-height: 1.5; color: var(--body); cursor: pointer; }
+.i9-check input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--accent); }
+.i9-tabs { display: grid; grid-template-columns: 1fr 1fr; background: #fff; border: 1px solid var(--line-strong); border-radius: 999px; padding: 4px; gap: 4px; align-self: flex-start; min-width: 280px; }
+.i9 .form-card { padding: 32px; }
+.i9-tabs button { font: inherit; font-size: 14.5px; font-weight: 600; border: 0; background: transparent; color: var(--body); padding: 10px 18px; border-radius: 999px; cursor: pointer; }
+.i9-tabs button.on { background: var(--ink); color: #fff; }
+.i9-upload { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #fff; border: 1px dashed var(--line-strong); border-radius: 14px; padding: 14px 16px; }
+.i9-upload.done { border-style: solid; border-color: #86c79b; background: #f3fbf5; }
+.i9-upload .btn { min-height: 40px; padding: 8px 18px; font-size: 14.5px; flex: none; }
+.i9-copy { display: flex; gap: 8px; }
+.i9-copy input { flex: 1; min-width: 0; font: inherit; font-size: 14px; border: 1px solid #d5dae1; border-radius: 12px; padding: 0 12px; height: 48px; background: #fff; }
+.i9-signout { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.i9-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; }
+.i9-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.i9-table th, .i9-table td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.i9-table th { font-size: 13px; color: var(--muted); font-weight: 600; background: var(--surface); }
+.i9-table tr:last-child td { border-bottom: 0; }
+.i9-badge { display: inline-block; font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface); color: var(--body); white-space: nowrap; }
+.i9-badge.s-section1_complete, .i9-badge.s-section2_complete { background: #fff4e5; color: #8a4b00; }
+.i9-badge.s-everify_submitted { background: var(--accent-soft); color: var(--accent-hover); }
+.i9-badge.s-closed { background: #e3f4e8; color: #14532d; }
+.i9-badge.s-cancelled { background: #f1f1f1; color: #6b7280; }
+.i9-dl { display: grid; grid-template-columns: minmax(160px, 260px) 1fr; margin: 0; }
+.i9-row { display: contents; }
+.i9-row dt, .i9-row dd { padding: 10px 0; border-bottom: 1px solid var(--line); margin: 0; font-size: 15px; }
+.i9-row dt { color: var(--muted); padding-right: 16px; }
+.i9-row summary { cursor: pointer; }
+.i9-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.i9-doc { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.i9-doc img { width: 100%; height: 160px; object-fit: cover; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+.i9-doc figcaption { font-size: 13px; color: var(--muted); }
+.i9-pdf { display: flex; align-items: center; justify-content: center; height: 160px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; }
+.i9-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.55; color: var(--body); }
+.print-only { display: none; }
+@media (max-width: 560px) {
+  .i9-card, .i9 .form-card { padding: 20px; }
+  .i9-tabs { align-self: stretch; min-width: 0; }
+  .i9-fieldset { padding: 16px !important; }
+  .i9-dl { grid-template-columns: 1fr; }
+  .i9-row dt { border-bottom: 0; padding-bottom: 0; }
+  .i9-upload { flex-direction: column; align-items: stretch; }
+}
+@media print {
+  .site-header, .site-footer, .no-print, .skip-link { display: none !important; }
+  .print-only { display: flex; }
+  .i9-page { padding: 0; gap: 16px; }
+  .i9-card { border: 0; padding: 0; break-inside: avoid; }
+  .i9-doc img { height: auto; max-height: 360px; object-fit: contain; }
+}
