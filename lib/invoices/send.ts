@@ -9,12 +9,12 @@ import { recomputeDraft, type Invoice, type Vendor } from "./server";
 
 const mdY = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(0, 4)}`;
 
-type Loaded = { inv: Invoice; vendor: Vendor; person: { first_name: string; last_name: string; client_name: string | null } };
+type Loaded = { inv: Invoice; vendor: Vendor; person: { first_name: string; last_name: string; client_name: string | null; payment_terms_days: number | null } };
 
 export async function loadInvoice(id: string): Promise<Loaded | null> {
   const { data } = await db()
     .from("stagity_invoices")
-    .select("*, stagity_vendors(*), stagity_people(first_name, last_name, client_name)")
+    .select("*, stagity_vendors(*), stagity_people(first_name, last_name, client_name, payment_terms_days)")
     .eq("id", id)
     .maybeSingle();
   if (!data) return null;
@@ -90,7 +90,8 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   // Reserve the number now (unique), so two sends can't take the same one.
   const { error: reserveErr } = await db().from("stagity_invoices").update({ number }).eq("id", id).eq("status", "draft");
   if (reserveErr) return { error: "Couldn't assign an invoice number. Please try again." };
-  const due = addDays(issue, vendor.payment_terms_days);
+  // The consultant's own payment terms win over the vendor default.
+  const due = addDays(issue, person.payment_terms_days ?? vendor.payment_terms_days);
   const ready: Loaded = { ...loaded, inv: { ...inv, number, issue_date: issue, due_date: due, status: "sent" } };
   const pdf = await buildInvoicePdf({ ...(await pdfData(ready)), draft: false });
 

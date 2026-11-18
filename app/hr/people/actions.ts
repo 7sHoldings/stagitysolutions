@@ -46,6 +46,9 @@ export async function assignConsultant(_prev: ActionState, formData: FormData): 
   if (pay === null || !Number.isFinite(pay) || pay < 0 || pay > 10000) return { error: "Enter the consultant's hourly pay rate." };
   if (bill === null || !Number.isFinite(bill) || bill < 0 || bill > 10000) return { error: "Enter the hourly bill rate to the vendor." };
   if (managerEmail && !emailOk(managerEmail)) return { error: "Enter a valid client manager email." };
+  const termsRaw = clip(formData.get("personTerms"), 4);
+  const terms = termsRaw ? Number(termsRaw) : null;
+  if (terms !== null && (!Number.isInteger(terms) || terms < 0 || terms > 180)) return { error: "Payment terms must be 0–180 days, or leave it empty for the vendor default." };
   const { error } = await db()
     .from("stagity_people")
     .update({
@@ -56,6 +59,7 @@ export async function assignConsultant(_prev: ActionState, formData: FormData): 
       client_manager_name: clip(formData.get("managerName"), 120) || null,
       client_manager_email: managerEmail,
       po_number: clip(formData.get("poNumber"), 80) || null,
+      payment_terms_days: terms,
       kind: "consultant",
     })
     .eq("id", personId);

@@ -12,6 +12,7 @@ type Person = { id: string; name: string };
 export type Assigned = Person & {
   pay_rate: number | null; bill_rate: number | null; client_name: string | null;
   client_manager_name: string | null; client_manager_email: string | null; po_number: string | null;
+  payment_terms_days: number | null;
 };
 
 const L = ({ t, hint }: { t: string; hint?: string }) => <span>{t}{hint && <span className="field-hint"> ({hint})</span>}</span>;
@@ -34,6 +35,7 @@ function RateFields({ current }: { current?: Assigned }) {
       <label className="field"><L t="Bill rate ($/h)" hint="invoice" /><input name="billRate" type="number" step="0.01" min="0" defaultValue={current?.bill_rate ?? ""} placeholder="e.g. 70" /></label>
       <label className="field"><L t="Client" hint="optional" /><input name="clientName" defaultValue={current?.client_name ?? ""} /></label>
       <label className="field"><L t="PO / reference" hint="optional" /><input name="poNumber" defaultValue={current?.po_number ?? ""} /></label>
+      <label className="field"><L t="Payment terms (days)" hint="empty = vendor default" /><input name="personTerms" type="number" min={0} max={180} defaultValue={current?.payment_terms_days ?? ""} placeholder="e.g. 30" /></label>
     </div>
   );
 }
@@ -158,7 +160,7 @@ export function ConsultantRow({ vendorId, c }: { vendorId: string; c: Assigned }
     <tr>
       <td>
         <a href={`/hr/people/${c.id}`}><strong>{c.name}</strong></a>
-        {c.po_number && <div className="muted i9-small">PO {c.po_number}</div>}
+        <div className="muted i9-small">{[c.po_number ? `PO ${c.po_number}` : "", c.payment_terms_days != null ? `Net ${c.payment_terms_days}` : ""].filter(Boolean).join(" · ")}</div>
       </td>
       <td>{c.client_name ?? <span className="muted">—</span>}</td>
       <td className="i9-num">{money(c.pay_rate)}</td>

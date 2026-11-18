@@ -8,7 +8,7 @@ export default async function Vendors() {
     db().from("stagity_vendors").select("*").order("name"),
     db()
       .from("stagity_people")
-      .select("id, first_name, last_name, active, kind, vendor_id, pay_rate, bill_rate, client_name, client_manager_name, client_manager_email, po_number")
+      .select("id, first_name, last_name, active, kind, vendor_id, pay_rate, bill_rate, client_name, client_manager_name, client_manager_email, po_number, payment_terms_days")
       .eq("kind", "consultant")
       .order("last_name"),
   ]);
@@ -44,7 +44,7 @@ export default async function Vendors() {
                   <h2 className="i9-h3">{v.name}</h2>
                   <div className="hr-chips">
                     <span className="hr-chip">{v.billing_cycle === "weekly" ? "Weekly invoice" : "Monthly invoice"}</span>
-                    <span className="hr-chip">{v.payment_terms_days} days</span>
+                    <span className="hr-chip">Net {v.payment_terms_days} default</span>
                     <span className="hr-chip">{list.length} consultant{list.length === 1 ? "" : "s"}</span>
                     {!v.active && <span className="hr-chip off">Inactive</span>}
                   </div>
