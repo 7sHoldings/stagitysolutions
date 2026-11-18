@@ -75,6 +75,29 @@ async function nextInvoiceNumber(issueDate: string): Promise<string> {
   return `${base}-${n}`;
 }
 
+export type MailFile = { filename: string; content: Uint8Array; contentType?: string };
+
+/** The approved-timesheet screenshots/PDFs the consultant uploaded for the weeks on this invoice. */
+export async function approvedTimesheetFiles(invoiceId: string): Promise<MailFile[]> {
+  const { data: days } = await db().from("stagity_timesheet_days").select("timesheet_id").eq("invoice_id", invoiceId);
+  const sheetIds = [...new Set((days ?? []).map((d) => d.timesheet_id as string))];
+  if (!sheetIds.length) return [];
+  const [{ data: files }, { data: sheets }] = await Promise.all([
+    db().from("stagity_timesheet_files").select("timesheet_id, storage_path, original_name, mime_type").in("timesheet_id", sheetIds),
+    db().from("stagity_timesheets").select("id, week_start").in("id", sheetIds),
+  ]);
+  const out: MailFile[] = [];
+  const seen = new Set<string>();
+  for (const f of files ?? []) {
+    if (seen.has(f.storage_path)) continue;
+    seen.add(f.storage_path);
+    const { data: blob } = await db().storage.from(TS_BUCKET).download(f.storage_path);
+    const week = sheets?.find((x) => x.id === f.timesheet_id)?.week_start ?? "";
+    if (blob) out.push({ filename: `Approved timesheet ${week} - ${f.original_name ?? "file"}`, content: new Uint8Array(await blob.arrayBuffer()), contentType: f.mime_type ?? undefined });
+  }
+  return out;
+}
+
 /** Approves a draft: assigns the invoice number, builds the PDF and emails it to the vendor. */
 export async function approveAndSend(id: string, hr: string): Promise<{ error?: string; message?: string }> {
   await recomputeDraft(id); // pick up any rate change before sending
@@ -96,25 +119,8 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   const ready: Loaded = { ...loaded, inv: { ...inv, number, issue_date: issue, due_date: due, status: "sent" } };
   const pdf = await buildInvoicePdf({ ...(await pdfData(ready)), draft: false });
 
-  const attachments: { filename: string; content: Uint8Array; contentType?: string }[] = [
-    { filename: `Invoice ${number}.pdf`, content: pdf, contentType: "application/pdf" },
-  ];
-  if (vendor.attach_timesheets) {
-    const { data: days } = await db().from("stagity_timesheet_days").select("timesheet_id").eq("invoice_id", id);
-    const sheetIds = [...new Set((days ?? []).map((d) => d.timesheet_id as string))];
-    const [{ data: files }, { data: sheets }] = await Promise.all([
-      db().from("stagity_timesheet_files").select("timesheet_id, storage_path, original_name, mime_type").in("timesheet_id", sheetIds.length ? sheetIds : ["00000000-0000-0000-0000-000000000000"]),
-      db().from("stagity_timesheets").select("id, week_start").in("id", sheetIds.length ? sheetIds : ["00000000-0000-0000-0000-000000000000"]),
-    ]);
-    const seen = new Set<string>();
-    for (const f of files ?? []) {
-      if (seen.has(f.storage_path)) continue;
-      seen.add(f.storage_path);
-      const { data: blob } = await db().storage.from(TS_BUCKET).download(f.storage_path);
-      const week = sheets?.find((x) => x.id === f.timesheet_id)?.week_start ?? "";
-      if (blob) attachments.push({ filename: `Approved timesheet ${week} - ${f.original_name ?? "file"}`, content: new Uint8Array(await blob.arrayBuffer()), contentType: f.mime_type ?? undefined });
-    }
-  }
+  // The vendor always gets the consultant's client-approved timesheets with the invoice.
+  const attachments = [{ filename: `Invoice ${number}.pdf`, content: pdf, contentType: "application/pdf" }, ...(await approvedTimesheetFiles(id))];
 
   const consultant = `${person.first_name} ${person.last_name}`;
   const cc = (vendor.cc_emails ?? "").split(",").map((e) => e.trim()).filter(Boolean);
@@ -126,7 +132,7 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
       "Hello,",
       `This email is regarding the ${consultant} invoice. Please find attached invoice #${number} for ${periodLabel(inv.period_start, inv.period_end)} (${mdY(inv.period_start)} to ${mdY(inv.period_end)}).`,
       `Total: ${money(Number(inv.total))} (${Number(inv.regular_hours) + Number(inv.overtime_hours)} hours × ${money(Number(inv.bill_rate))}).${inv.po_number ? ` PO/reference: ${inv.po_number}.` : ""}`,
-      ...(vendor.attach_timesheets ? ["The client-approved timesheets for this period are attached."] : []),
+      "The client-approved timesheets for this period are attached.",
       "Please acknowledge once received.",
       `If you have any questions, please reach out to ${company.invoiceQuestionsEmail} or ${company.phone}.`,
       "Thanks & Regards,",

@@ -4,6 +4,7 @@ import { db, requireHr } from "@/lib/i9/server";
 import { statusLabels } from "@/lib/i9/forms";
 import { money, sheetLabel, todayCT } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
+import BackLink from "../../BackLink";
 import { setActive } from "../actions";
 import { DeletePersonButton, EditPersonForm, PayForm, ResetPasswordForm, SignupDueForm, StartI9Form } from "../forms";
 
@@ -25,7 +26,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
       <HrNav active="/hr/people" email={hr} />
       <div className="hr-title">
         <div>
-          <p><Link href="/hr/people">← People</Link></p>
+          <BackLink href="/hr/people" label="All people" />
           <h1 className="h2">{p.first_name} {p.last_name}</h1>
           <p className="muted">
             {p.email ?? "No portal login (payroll only)"} · {p.kind === "employee" ? "Employee" : "Consultant"}

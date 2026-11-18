@@ -6,6 +6,7 @@ import { cancelCase } from "../../actions";
 import { EverifyForm, RecordForm } from "../../forms";
 import Section2Form from "./Section2Form";
 import HrNav from "../../HrNav";
+import BackLink from "../../BackLink";
 import PrintButton from "./PrintButton";
 
 const fmt = (iso: string | null) =>
@@ -52,7 +53,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   return (
     <section className="container hr-page">
       <HrNav active="/hr/i9" email={hr} />
-      <p className="no-print"><Link href="/hr/i9">← All Form I-9s</Link></p>
+      <BackLink href="/hr/i9" label="All Form I-9s" />
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>
           <p className="eyebrow">Form I-9 record</p>

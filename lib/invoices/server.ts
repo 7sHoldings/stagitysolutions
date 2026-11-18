@@ -13,6 +13,7 @@ export type Invoice = {
   status: "draft" | "sent" | "paid" | "void"; regular_hours: number; overtime_hours: number; bill_rate: number; bill_ot_rate: number;
   total: number; po_number: string | null; notes: string | null; issue_date: string | null; due_date: string | null;
   sent_at: string | null; sent_by: string | null; sent_to: string | null; paid_at: string | null; voided_reason: string | null;
+  review_requested_at?: string | null;
 };
 
 export const isDraftNumber = (n: string) => n.startsWith("DRAFT-");
@@ -41,14 +42,18 @@ export async function recomputeDraft(invoiceId: string) {
   const otRate = rate; // overtime hours are billed at the same rate
   const regular = round2(days.reduce((a, d) => a + Number(d.regular_hours), 0));
   const overtime = round2(days.reduce((a, d) => a + Number(d.overtime_hours), 0));
+  const total = invoiceTotal({ regular_hours: regular, overtime_hours: overtime, bill_rate: rate });
+  // If the amount changed after the team was asked to review it, ask again with the new numbers.
+  const changed = Number(inv.total) !== total || Number(inv.regular_hours) + Number(inv.overtime_hours) !== regular + overtime;
   await db()
     .from("stagity_invoices")
     .update({
+      ...(changed ? { review_requested_at: null } : {}),
       regular_hours: regular,
       overtime_hours: overtime,
       bill_rate: rate,
       bill_ot_rate: otRate,
-      total: invoiceTotal({ regular_hours: regular, overtime_hours: overtime, bill_rate: rate }),
+      total,
       po_number: inv.po_number ?? p.po_number,
     })
     .eq("id", invoiceId);
@@ -144,7 +149,7 @@ export async function periodCompleteness(inv: Pick<Invoice, "person_id" | "perio
   return { expected: owed.length, approved, complete: inv.period_end < today && approved === owed.length };
 }
 
-/** Auto-send is on unless HR turned it off on the Invoices page. */
+/** Invoices are never sent automatically any more: an admin approves each one (owner's decision). */
 export async function autoSendEnabled() {
-  return (await getSetting("invoice_auto_send")) !== "off";
+  return false;
 }

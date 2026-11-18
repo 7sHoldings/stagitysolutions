@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { db, requireHr } from "@/lib/i9/server";
-import { autoSendEnabled, periodCompleteness } from "@/lib/invoices/server";
+import { periodCompleteness } from "@/lib/invoices/server";
 import { addMonths, money, monthEnd, monthLabel, monthStart, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
 import MonthPicker from "../MonthPicker";
-import { refreshDrafts, setAutoSend } from "./actions";
-import { MarkPaidButton, RunAutomationButton, SendButton } from "./forms";
+import { CheckNowButton, MarkPaidButton, SendButton } from "./forms";
 
 type Row = {
   id: string; number: string; status: string; period_start: string; period_end: string; total: number; regular_hours: number;
@@ -79,7 +78,6 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
     if (p.stagity_vendors?.send_invoices === false) continue;
     if (!p.vendor_id || p.bill_rate == null) missingSetup.set(d.person_id, `${p.first_name} ${p.last_name}`);
   }
-  const auto = await autoSendEnabled();
   const name = (r: Row) => `${r.stagity_people.first_name} ${r.stagity_people.last_name}`;
   const periodText = (r: Row) => {
     const full = r.period_start.endsWith("-01") && r.period_end === monthEnd(r.period_start);
@@ -92,23 +90,16 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
       <div className="hr-title">
         <div>
           <h1 className="h2">Vendor invoices</h1>
-          <p className="muted">Sent from accounts@stagitysolutions.com with the PDF and approved timesheets. Each invoice is sent only once.</p>
+          <p className="muted">Sent from accounts@stagitysolutions.com with the PDF and the consultant&apos;s approved timesheets. Each invoice is sent only once.</p>
         </div>
-        <div className="btn-row" style={{ alignItems: "flex-start" }}>
-          <form action={refreshDrafts}><button className="btn btn-outline hr-btn-sm">Refresh drafts</button></form>
-          <RunAutomationButton />
-        </div>
+        <CheckNowButton />
       </div>
 
-      <div className={`hr-auto ${auto ? "on" : ""}`}>
+      <div className="hr-auto on">
         <span>
-          <strong>Automatic sending is {auto ? "on" : "off"}.</strong>{" "}
-          {auto ? "Each morning, any invoice whose month is over and fully approved is sent to the vendor." : "Drafts wait for you to click Approve & send."}
+          <strong>You approve every invoice.</strong> When a consultant&apos;s month is over and all their timesheets are approved, the invoice is prepared
+          and hr@, timesheets@ and accounts@ get an email with the draft and the timesheets. Nothing goes to a vendor until you tap <strong>Approve &amp; send</strong>.
         </span>
-        <form action={setAutoSend}>
-          <input type="hidden" name="on" value={auto ? "false" : "true"} />
-          <button className="btn btn-outline hr-btn-xs">{auto ? "Turn off" : "Turn on"}</button>
-        </form>
       </div>
 
       {missingSetup.size > 0 && (

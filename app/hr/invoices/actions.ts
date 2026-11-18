@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { audit, db, requireHr } from "@/lib/i9/server";
 import { recomputeDraft, syncDraftInvoices } from "@/lib/invoices/server";
 import { approveAndSend } from "@/lib/invoices/send";
-import { autoSendInvoices } from "@/lib/invoices/auto";
+import { requestInvoiceReviews } from "@/lib/invoices/auto";
 import { todayCT } from "@/lib/portal/dates";
 import type { ActionState } from "../actions";
 
@@ -87,25 +87,15 @@ export async function refreshDrafts(): Promise<void> {
 }
 
 /**
- * Runs the same check the morning automation does, right now: every draft whose period is over and
- * fully approved is sent. Invoices already sent are never sent again (only drafts are considered).
+ * "Check now": updates drafts and emails the team about any invoice that just became ready
+ * (same as the morning check). Never sends anything to a vendor.
  */
-export async function runAutomationNow(_prev: ActionState): Promise<ActionState> {
+export async function checkReadyNow(_prev: ActionState): Promise<ActionState> {
   const hr = await requireHr();
-  const r = await autoSendInvoices({ force: true });
-  await audit(null, `hr:${hr}`, "invoice_automation_run", { sent: r.sent.length, failed: r.failed.length, waiting: r.waiting });
+  const r = await requestInvoiceReviews();
+  await audit(null, `hr:${hr}`, "invoice_check_now", { notified: r.notified.length, failed: r.failed.length, waiting: r.waiting });
   refresh();
-  if (r.failed.length) return { error: `Sent ${r.sent.length}. ${r.failed.length} couldn't be sent: ${r.failed.join("; ")}` };
-  if (!r.sent.length) {
-    return { ok: true, message: r.waiting ? `Nothing sent: ${r.waiting} draft${r.waiting === 1 ? " is" : "s are"} still waiting for approved timesheets or the end of the period.` : "Nothing to send right now." };
-  }
-  return { ok: true, message: r.sent.join(" ") };
-}
-
-export async function setAutoSend(formData: FormData): Promise<void> {
-  const hr = await requireHr();
-  const on = formData.get("on") === "true";
-  await db().from("stagity_settings").upsert({ key: "invoice_auto_send", value: on ? "on" : "off", updated_at: new Date().toISOString(), updated_by: hr });
-  await audit(null, `hr:${hr}`, on ? "invoice_auto_send_on" : "invoice_auto_send_off");
-  refresh();
+  if (r.failed.length) return { error: `Couldn't email the review for: ${r.failed.join("; ")}. Check the email settings.` };
+  if (r.notified.length) return { ok: true, message: `Ready for review (email sent to the team): ${r.notified.join(", ")}.` };
+  return { ok: true, message: r.waiting ? `Nothing new is ready. ${r.waiting} draft${r.waiting === 1 ? " is" : "s are"} still waiting for approved timesheets or the end of the month.` : "Nothing new is ready." };
 }

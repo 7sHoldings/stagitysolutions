@@ -4,6 +4,7 @@ import { db, requireHr } from "@/lib/i9/server";
 import { deadlineFor, money, monthLabel, round2 } from "@/lib/portal/dates";
 import { gross, isFlat } from "@/lib/portal/payroll";
 import HrNav from "../../HrNav";
+import BackLink from "../../BackLink";
 import { lockRun, recalculate } from "../actions";
 import { AddLineButton, EditLineButton } from "../forms";
 
@@ -34,7 +35,7 @@ export default async function PayrollRun({ params }: { params: Promise<{ id: str
       <HrNav active="/hr/payroll" email={hr} />
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>
-          <p><Link href="/hr/payroll">← Payroll</Link></p>
+          <BackLink href="/hr/payroll" label="All payrolls" />
           <h1 className="h2">Payroll: {monthLabel(run.period_month)}</h1>
           <p className="muted">Pay date {run.pay_date} · timesheet deadline {deadlineFor(run.period_month)} · {draft ? "Draft" : `Locked by ${run.locked_by}`}</p>
         </div>

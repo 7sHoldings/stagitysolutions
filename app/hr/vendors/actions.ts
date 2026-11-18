@@ -20,7 +20,7 @@ export async function saveVendor(_prev: ActionState, formData: FormData): Promis
     address: clip(formData.get("address"), 500) || null,
     payment_terms_days: Number(clip(formData.get("terms"), 4) || 30),
     billing_cycle: clip(formData.get("cycle"), 10) === "weekly" ? "weekly" : "monthly",
-    attach_timesheets: formData.get("attach") === "on",
+    attach_timesheets: true, // the vendor always gets the approved timesheets with the invoice
     active: id ? formData.get("active") === "on" : true,
     notes: clip(formData.get("notes"), 1000) || null,
     send_invoices: formData.get("sendInvoices") === "on",

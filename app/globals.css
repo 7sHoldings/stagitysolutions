@@ -746,3 +746,13 @@ a.inv-cell:hover { outline: 2px solid currentColor; outline-offset: -2px; }
 .details-grid > * { min-width: 0; }
 .details-grid input, .details-grid select { width: 100%; min-width: 0; box-sizing: border-box; }
 @media (max-width: 640px) { .details-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .details-grid > :first-child { grid-column: 1 / -1; } }
+
+/* Back button on admin detail pages */
+.hr-back { display: inline-flex; width: fit-content; align-self: flex-start; justify-self: start; align-items: center; gap: 6px; padding: 8px 14px 8px 10px; margin-bottom: 14px; border: 1px solid #d1d5db; border-radius: 999px; background: #fff; color: #111827; font-size: 14.5px; font-weight: 600; text-decoration: none; transition: background .15s, border-color .15s; }
+.hr-back:hover { background: #f3f4f6; border-color: #9ca3af; }
+/* Detail page header: title left, status + actions right */
+.hr-detail-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px 24px; margin-bottom: 20px; }
+.hr-detail-head h1 { margin: 0; }
+.hr-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.hr-detail-actions .i9-badge { font-size: 14px; padding: 6px 14px; }
+.inv-ready { padding: 14px 16px; border-radius: 12px; background: #eff6ff; color: #1e3a8a; font-size: 14.5px; margin: 0; }

@@ -6,7 +6,7 @@ import { addDays, addMonths, deadlineFor, money, monthLabel, monthStart, payDate
 import { sendHrDigest, sendTimesheetReminder } from "@/lib/portal/mail";
 import { missingPeriods, monthOverview, type ConsultantRow, type SheetRow } from "@/lib/portal/timesheets";
 import { ensureDraftRun, gross, payrollCsv } from "@/lib/portal/payroll";
-import { autoSendInvoices } from "@/lib/invoices/auto";
+import { requestInvoiceReviews } from "@/lib/invoices/auto";
 import { sendSignupReminder } from "@/lib/i9/mail";
 import { sendAnnouncement, type AckRow } from "@/lib/announce";
 
@@ -21,7 +21,8 @@ export const maxDuration = 300;
  *    Wednesday–Friday     → again, if last week still isn't submitted
  *    Every 2 days         → anything missing for last month (1st, 3rd, 5th = deadline, 7th, …) until it's in
  * 2. Summary to the timesheets inbox on the 6th (who missed the deadline)
- * 3. Vendor invoices: any invoice whose period is over and fully approved is sent automatically from accounts@
+ * 3. Vendor invoices: when a period is over and fully approved, the team (hr@, timesheets@, accounts@) gets a
+ *    "please review" email with the draft PDF and approved timesheets. An admin must click Approve & send.
  * 4. Payroll (20th; Friday before if it's a weekend): a preview sheet 3 business days before,
  *    and the final ADP RUN sheet on the morning of the business day before payroll, emailed to accounts@
  * 5. Portal sign-up: daily reminder (hr@) to people who haven't signed in and set a password, until their sign-up due date
@@ -124,19 +125,12 @@ export async function GET(req: Request) {
     }
   }
 
-  // ---- 3. Vendor invoices ----
+  // ---- 3. Vendor invoices: never sent automatically. Complete, approved drafts → "please review" email to the team ----
   try {
-    const inv = await autoSendInvoices();
-    log.push(...inv.sent.map((m) => `invoice:${m}`), ...inv.failed.map((m) => `invoice-failed:${m}`));
-    if (inv.failed.length && (await once(null, "invoice-failures", today))) {
-      for (const to of [company.accountsEmail]) {
-        await sendHrDigest(to, "Some vendor invoices couldn't be sent automatically", [
-          `${inv.failed.length} invoice(s) are complete but couldn't be sent. Open the Invoices page to see them and send manually.`,
-        ], `${siteOrigin()}/hr/invoices`);
-      }
-    }
+    const inv = await requestInvoiceReviews();
+    log.push(...inv.notified.map((m) => `invoice-review:${m}`), ...inv.failed.map((m) => `invoice-review-failed:${m}`));
   } catch (e) {
-    console.error("Auto invoices failed:", e);
+    console.error("Invoice review emails failed:", e);
   }
 
   // ---- 4. Payroll sheet ----

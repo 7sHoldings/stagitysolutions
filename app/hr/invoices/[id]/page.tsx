@@ -5,6 +5,7 @@ import { periodCompleteness } from "@/lib/invoices/server";
 import { loadInvoice } from "@/lib/invoices/send";
 import { money, sheetLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
+import BackLink from "../../BackLink";
 import { DraftEditForm, PaidForm, SendButton, UnpaidButton, VoidForm } from "../forms";
 
 const label: Record<string, string> = { draft: "Draft", sent: "Sent", paid: "Paid", void: "Void" };
@@ -34,17 +35,27 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   return (
     <section className="container hr-page">
       <HrNav active="/hr/invoices" email={hr} />
-      <div className="hero-row" style={{ alignItems: "flex-end" }}>
+      <BackLink href={`/hr/invoices?month=${inv.period_start.slice(0, 7)}`} label="All invoices" />
+      <div className="hr-detail-head">
         <div>
-          <p><Link href="/hr/invoices">← Invoices</Link></p>
           <h1 className="h2">{draft ? "Draft invoice" : `Invoice ${inv.number}`}</h1>
-          <p className="muted">{consultant} · {vendor.name} · {shortDate(inv.period_start)} – {shortDate(inv.period_end)}</p>
+          <p className="muted" style={{ margin: "6px 0 0" }}>{consultant} · {vendor.name} · {shortDate(inv.period_start)} – {shortDate(inv.period_end)}</p>
         </div>
-        <div className="btn-row">
+        <div className="hr-detail-actions">
           <span className={`i9-badge ${cls[inv.status]}`}>{label[inv.status]}</span>
-          <a className="btn btn-outline" href={`/hr/invoices/${id}/pdf`} target="_blank" rel="noreferrer">{draft ? "Preview PDF" : "View PDF"}</a>
+          <a className="btn btn-outline hr-btn-sm" href={`/hr/invoices/${id}/pdf`} target="_blank" rel="noreferrer">{draft ? "Preview PDF" : "View PDF"}</a>
+          {draft && <SendButton id={id} vendor={vendor.name} total={money(Number(inv.total))} to={[vendor.ap_email, vendor.cc_emails].filter(Boolean).join(", ")} />}
         </div>
       </div>
+      {draft && completeness.complete && (
+        <p className="inv-ready">
+          <strong>Ready to send.</strong> Every timesheet in this period is approved.{" "}
+          {inv.review_requested_at
+            ? `The team was emailed to review it on ${new Date(inv.review_requested_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" })}.`
+            : "The team will be emailed to review it."}{" "}
+          Check the details below, then tap <strong>Approve &amp; send</strong>.
+        </p>
+      )}
 
       <div className="i9-card">
         <dl className="i9-dl">
@@ -76,12 +87,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
 
       {draft && (
         <div className="form-card">
-          <h2 className="i9-h3">Review and send</h2>
+          <h2 className="i9-h3">PO number &amp; note (optional)</h2>
           <DraftEditForm id={id} poNumber={inv.po_number ?? ""} notes={inv.notes ?? ""} />
           <p className="muted i9-small">
-            Sending assigns the invoice number and emails {vendor.ap_email}{vendor.cc_emails ? ` (cc ${vendor.cc_emails})` : ""} the PDF{vendor.attach_timesheets ? " and the approved timesheets" : ""}. You get a copy.
+            Sending assigns the invoice number and emails {vendor.ap_email}{vendor.cc_emails ? ` (cc ${vendor.cc_emails})` : ""} the PDF and the approved timesheets. accounts@ gets a copy.
           </p>
-          <SendButton id={id} vendor={vendor.name} total={money(Number(inv.total))} />
+          <SendButton id={id} vendor={vendor.name} total={money(Number(inv.total))} to={[vendor.ap_email, vendor.cc_emails].filter(Boolean).join(", ")} />
         </div>
       )}
       {inv.status === "paid" && (
@@ -94,10 +105,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <div className="form-card">
           <h2 className="i9-h3">Payment</h2>
           <PaidForm id={id} today={todayCT()} />
-          <details>
-            <summary className="muted">Void this invoice</summary>
+          <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 14, marginTop: 6 }}>
+            <p className="muted i9-small" style={{ margin: "0 0 8px" }}>Sent by mistake or with wrong hours?</p>
             <VoidForm id={id} />
-          </details>
+          </div>
         </div>
       )}
     </section>

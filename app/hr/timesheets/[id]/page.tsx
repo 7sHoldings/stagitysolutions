@@ -4,6 +4,7 @@ import { db, requireHr } from "@/lib/i9/server";
 import { TS_BUCKET } from "@/lib/portal/server";
 import { dayName, datesBetween, periodFor, sheetLabel, shortDate } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
+import BackLink from "../../BackLink";
 import { ReviewForm } from "../forms";
 
 export default async function HrTimesheet({ params }: { params: Promise<{ id: string }> }) {
@@ -30,7 +31,7 @@ export default async function HrTimesheet({ params }: { params: Promise<{ id: st
     <section className="container hr-page">
       <HrNav active="/hr/timesheets" email={hr} />
       <div>
-        <p><Link href={`/hr/timesheets?month=${s.week_start.slice(0, 7)}`}>← Timesheets</Link></p>
+        <BackLink href={`/hr/timesheets?month=${s.week_start.slice(0, 7)}`} label="All timesheets" />
         <h1 className="h2">{p.first_name} {p.last_name}: {sheetLabel(s.week_start)}</h1>
         <p className="muted">
           {p.client_name ?? "No client"}{p.client_manager_name ? ` · manager ${p.client_manager_name}` : ""} · status <span className={`i9-dot ${s.status}`}>{s.status}</span>

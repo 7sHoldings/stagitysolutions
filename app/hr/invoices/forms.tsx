@@ -1,27 +1,34 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { markPaid, markUnpaid, runAutomationNow, sendInvoice, updateDraft, voidInvoice } from "./actions";
+import { checkReadyNow, markPaid, markUnpaid, sendInvoice, updateDraft, voidInvoice } from "./actions";
 import { Modal } from "../Modal";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 
-export function SendButton({ id, label, vendor, total }: { id: string; label?: string; vendor: string; total: string }) {
+/** "Approve & send": asks for confirmation in a pop-up, then emails the vendor. */
+export function SendButton({ id, label, vendor, total, to }: { id: string; label?: string; vendor: string; total: string; to?: string }) {
+  const [open, setOpen] = useState(false);
   const [s, action, pending] = useActionState(sendInvoice, {} as ActionState);
-  if (s.ok) return <span className="form-status ok" style={{ padding: "6px 12px" }}>{s.message}</span>;
+  if (s.ok) return <span className="form-status ok" style={{ padding: "8px 14px" }}>✓ {s.message}</span>;
   return (
-    <form
-      action={action}
-      onSubmit={(e) => { if (!confirm(`Send this ${total} invoice to ${vendor} now?`)) e.preventDefault(); }}
-      className="i9-stack"
-      style={{ gap: 6 }}
-    >
-      <input type="hidden" name="id" value={id} />
-      <button className="btn btn-primary" disabled={pending} style={{ minHeight: 40, padding: "8px 18px", fontSize: 14.5 }}>
-        {pending ? "Sending…" : label ?? "Approve & send"}
-      </button>
-      {s.error && <span className="i9-small" style={{ color: "#b91c1c", maxWidth: 260 }}>{s.error}</span>}
-    </form>
+    <>
+      <button type="button" className="btn btn-primary hr-btn-sm" onClick={() => setOpen(true)}>{label ?? "Approve & send"}</button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Send this invoice?">
+        <form action={action} className="i9-stack" style={{ gap: 16 }}>
+          <input type="hidden" name="id" value={id} />
+          <p className="text">
+            Send the <strong>{total}</strong> invoice to <strong>{vendor}</strong>{to ? <> ({to})</> : null} now, with the approved timesheets attached?
+          </p>
+          <p className="muted i9-small">The invoice number is assigned now. Once sent, it can&apos;t be changed (only voided).</p>
+          {s.error && <p className="form-status err">{s.error}</p>}
+          <div className="hr-modal-actions">
+            <button type="button" className="btn btn-outline hr-btn-sm" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn btn-primary hr-btn-sm" disabled={pending}>{pending ? "Sending…" : "Yes, send to vendor"}</button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 
@@ -87,25 +94,36 @@ export function UnpaidButton({ id }: { id: string }) {
 }
 
 export function VoidForm({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
   const [s, action, pending] = useActionState(voidInvoice, {} as ActionState);
+  if (s.ok) return <p className="form-status ok">{s.message}</p>;
   return (
-    <form action={action} className="i9-stack" onSubmit={(e) => { if (!confirm("Void this invoice? Tell the vendor separately that it's cancelled.")) e.preventDefault(); }}>
-      <input type="hidden" name="id" value={id} />
-      <label className="field">Reason<input name="reason" placeholder="e.g. wrong hours, will reissue" /></label>
-      <Status s={s} />
-      <button className="btn btn-outline" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Voiding…" : "Void invoice"}</button>
-    </form>
+    <>
+      <button type="button" className="btn hr-btn-danger hr-btn-sm" onClick={() => setOpen(true)}>Void invoice…</button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Void this invoice?">
+        <form action={action} className="i9-stack" style={{ gap: 16 }}>
+          <input type="hidden" name="id" value={id} />
+          <p className="text">Voiding cancels it in our records and puts its hours back on a new draft. Tell the vendor separately that it&apos;s cancelled.</p>
+          <label className="field">Reason<input name="reason" placeholder="e.g. wrong hours, will reissue" required /></label>
+          {s.error && <p className="form-status err">{s.error}</p>}
+          <div className="hr-modal-actions">
+            <button type="button" className="btn btn-outline hr-btn-sm" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn hr-btn-solid-danger hr-btn-sm" disabled={pending}>{pending ? "Voiding…" : "Yes, void it"}</button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 
-/** Runs the invoice automation now (same as the morning run). Already-sent invoices are never re-sent. */
-export function RunAutomationButton() {
-  const [s, action, pending] = useActionState(runAutomationNow, {} as ActionState);
+/** Checks for invoices that just became ready and emails the team to review them. Never sends to vendors. */
+export function CheckNowButton() {
+  const [s, action, pending] = useActionState(checkReadyNow, {} as ActionState);
   return (
-    <form action={action} className="i9-stack" style={{ gap: 6, alignItems: "flex-end" }}>
-      <button className="btn btn-primary hr-btn-sm" disabled={pending}>{pending ? "Checking…" : "Run automation now"}</button>
-      {s.message && <span className="hr-sent" style={{ maxWidth: 360, textAlign: "right" }}>✓ {s.message}</span>}
-      {s.error && <span className="i9-small" style={{ color: "#b91c1c", maxWidth: 360, textAlign: "right" }}>{s.error}</span>}
+    <form action={action} className="i9-stack" style={{ gap: 6 }}>
+      <button className="btn btn-outline hr-btn-sm" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Checking…" : "Check for ready invoices"}</button>
+      {s.message && <span className="hr-sent" style={{ maxWidth: 420 }}>✓ {s.message}</span>}
+      {s.error && <span className="i9-small" style={{ color: "#b91c1c", maxWidth: 420 }}>{s.error}</span>}
     </form>
   );
 }

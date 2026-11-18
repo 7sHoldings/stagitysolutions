@@ -70,7 +70,6 @@ export function VendorForm({ v, close, consultants = [] }: { v?: V; close?: () =
         <label className="field"><L t="Expected payment within (days)" /><input name="terms" type="number" min={0} max={180} defaultValue={v?.payment_terms_days ?? 30} /></label>
       </div>
       <label className="field"><L t="Billing address" /><textarea name="address" defaultValue={v?.address ?? ""} rows={3} style={{ minHeight: 84 }} placeholder={"16803 Dallas Parkway, Suite 300\nAddison, TX 75001"} /></label>
-      {invoiced && <label className="i9-check"><input type="checkbox" name="attach" defaultChecked={v?.attach_timesheets ?? true} /> Attach the approved timesheets to invoice emails</label>}
       {!isNew && <label className="i9-check"><input type="checkbox" name="active" defaultChecked={v?.active ?? true} /> Active</label>}
 
       {isNew && (
