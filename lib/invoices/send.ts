@@ -117,7 +117,7 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   const consultant = `${person.first_name} ${person.last_name}`;
   const cc = (vendor.cc_emails ?? "").split(",").map((e) => e.trim()).filter(Boolean);
   const ok = await send(
-    vendor.ap_email,
+    vendor.ap_email.split(/,\s*/).filter(Boolean).join(", "),
     `Invoice ${number}: ${consultant}, ${periodLabel(inv.period_start, inv.period_end)}`,
     [
       "Hello,",
@@ -140,5 +140,5 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
     .update({ number, status: "sent", issue_date: issue, due_date: due, sent_at: new Date().toISOString(), sent_by: hr, sent_to: [vendor.ap_email, ...cc].join(", ") })
     .eq("id", id);
   await audit(null, `hr:${hr}`, "invoice_sent", { invoiceId: id, number, total: inv.total, to: vendor.ap_email });
-  return { message: `Invoice ${number} sent to ${vendor.ap_email}.` };
+  return { message: `Invoice ${number} sent to ${[vendor.ap_email, ...cc].join(", ")}.` };
 }

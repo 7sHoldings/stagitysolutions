@@ -79,7 +79,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <h2 className="i9-h3">Review and send</h2>
           <DraftEditForm id={id} poNumber={inv.po_number ?? ""} notes={inv.notes ?? ""} />
           <p className="muted i9-small">
-            Sending assigns the invoice number and emails {vendor.ap_email} the PDF{vendor.attach_timesheets ? " and the approved timesheets" : ""}. You get a copy.
+            Sending assigns the invoice number and emails {vendor.ap_email}{vendor.cc_emails ? ` (cc ${vendor.cc_emails})` : ""} the PDF{vendor.attach_timesheets ? " and the approved timesheets" : ""}. You get a copy.
           </p>
           <SendButton id={id} vendor={vendor.name} total={money(Number(inv.total))} />
         </div>

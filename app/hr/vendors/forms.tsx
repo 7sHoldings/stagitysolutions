@@ -15,7 +15,7 @@ export function VendorForm({ v }: { v?: V }) {
       {v?.id && <input type="hidden" name="id" value={v.id} />}
       <div className="form-grid">
         <label className="field">Vendor name<input name="name" defaultValue={v?.name} required /></label>
-        <label className="field">Send invoices to (AP email)<input name="apEmail" type="email" defaultValue={v?.ap_email} required /></label>
+        <label className="field">Send invoices to (one or more emails, separated by commas)<input name="apEmail" defaultValue={v?.ap_email} required placeholder="accounts@vendor.com, finance@vendor.com" /></label>
         <label className="field">CC (optional, comma-separated)<input name="ccEmails" defaultValue={v?.cc_emails ?? ""} /></label>
         <label className="field">Expected payment within (days, for your tracking)<input name="terms" type="number" min={0} max={180} defaultValue={v?.payment_terms_days ?? 30} /></label>
         <label className="field">Invoice
