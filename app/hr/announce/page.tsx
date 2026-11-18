@@ -48,6 +48,7 @@ export default async function Announce() {
                 <h2 className="i9-h3">New timesheet process{first?.start_month ? `, from ${monthLabel(first.start_month)}` : ""}</h2>
                 <p className="muted i9-small">
                   <strong>{done} of {list.length}</strong> acknowledged{first?.ack_by ? ` · due ${longDate(first.ack_by)}` : ""}
+                  {first?.ack_by && first.ack_by >= today && done < list.length ? " · reminders go out automatically every morning until then" : ""}
                 </p>
                 <div className="ack-bar" aria-hidden="true"><span style={{ width: `${list.length ? (done / list.length) * 100 : 0}%` }} /></div>
               </div>

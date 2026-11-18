@@ -740,3 +740,5 @@ a.inv-cell:hover { outline: 2px solid currentColor; outline-offset: -2px; }
 .ack-bar { height: 6px; border-radius: 999px; background: #e5e7eb; overflow: hidden; margin-top: 8px; max-width: 280px; }
 .ack-bar span { display: block; height: 100%; background: #16a34a; }
 .ack-done { display: grid; gap: 6px; padding: 14px 16px; border-radius: 12px; background: #ecfdf5; color: #065f46; }
+.ack-warn { margin: 0; padding: 10px 12px; border-radius: 10px; background: #fffbeb; color: #92400e; font-size: 14px; }
+.ack-ok { margin: 0; padding: 10px 12px; border-radius: 10px; background: #ecfdf5; color: #065f46; font-size: 14px; }

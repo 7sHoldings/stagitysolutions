@@ -2,10 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, requireHr } from "@/lib/i9/server";
 import { statusLabels } from "@/lib/i9/forms";
-import { money, sheetLabel } from "@/lib/portal/dates";
+import { money, sheetLabel, todayCT } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
 import { setActive } from "../actions";
-import { DeletePersonButton, EditPersonForm, PayForm, ResetPasswordForm, StartI9Form } from "../forms";
+import { DeletePersonButton, EditPersonForm, PayForm, ResetPasswordForm, SignupDueForm, StartI9Form } from "../forms";
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const hr = await requireHr();
@@ -18,6 +18,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
     db().from("stagity_timesheets").select("id, week_start, status, total_hours").eq("person_id", id).order("week_start", { ascending: false }).limit(12),
   ]);
   const vendor = (p.stagity_vendors as { name: string } | null)?.name;
+  const { count: reminders } = await db().from("stagity_reminder_log").select("id", { count: "exact", head: true }).eq("person_id", id).eq("kind", "signup-reminder");
 
   return (
     <section className="container hr-page">
@@ -71,10 +72,27 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
           <div className="hr-panel">
             <h2 className="i9-h3">Portal login</h2>
-            <p className="muted i9-small">
-              {p.must_change_password ? "They haven't set their own password yet." : "They've set their own password."} A new temporary password signs them out everywhere.
-            </p>
-            <ResetPasswordForm id={id} />
+            {!p.email ? (
+              <p className="muted i9-small">Payroll only. Add an email under Personal details to give them a login.</p>
+            ) : p.must_change_password ? (
+              <>
+                <p className="ack-warn">
+                  <strong>Not signed up yet.</strong>{" "}
+                  {p.signup_due && p.signup_due >= todayCT()
+                    ? `A reminder email goes out every morning until ${p.signup_due}${reminders ? ` (${reminders} sent so far)` : ""}.`
+                    : "No more automatic reminders (the date has passed or isn't set)."}
+                </p>
+                <SignupDueForm id={id} due={p.signup_due ?? ""} />
+                <p className="muted i9-small">Lost the email or the password expired? Send a new temporary password (this also gives them another 7 days).</p>
+                <ResetPasswordForm id={id} />
+              </>
+            ) : (
+              <>
+                <p className="ack-ok">✓ Signed up{p.last_login_at ? `, last signed in ${new Date(p.last_login_at).toLocaleDateString("en-US")}` : ""}.</p>
+                <p className="muted i9-small">A new temporary password signs them out everywhere.</p>
+                <ResetPasswordForm id={id} />
+              </>
+            )}
           </div>
 
           <div className="hr-panel">

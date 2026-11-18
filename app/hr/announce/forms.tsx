@@ -42,7 +42,7 @@ export function SendForm({ defaultRecipients, defaultMonth, defaultAckBy }: { de
         <label className="field"><span>First month in the portal<span className="field-hint"> (timesheets they submit there)</span></span><input type="month" name="startMonth" defaultValue={defaultMonth} required /></label>
         <label className="field"><span>Acknowledge by<span className="field-hint"> (optional)</span></span><input type="date" name="ackBy" defaultValue={defaultAckBy} /></label>
       </div>
-      <p className="muted i9-small">Each person gets their own email with an <strong>I acknowledge</strong> button. Anyone who already acknowledged isn&apos;t emailed again.</p>
+      <p className="muted i9-small">Each person gets their own email with an <strong>I acknowledge</strong> button. Anyone who already acknowledged isn&apos;t emailed again. Until the acknowledge-by date, anyone who hasn&apos;t acknowledged gets the email again automatically every morning.</p>
       <Status s={s} />
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Sending…" : "Send to all"}</button>
     </form>

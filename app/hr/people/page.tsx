@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, requireHr } from "@/lib/i9/server";
-import { money } from "@/lib/portal/dates";
+import { money, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
 import { ConfirmAction } from "../Modal";
 import { deletePerson } from "./actions";
@@ -10,8 +10,11 @@ export default async function People() {
   const hr = await requireHr();
   const { data: people } = await db()
     .from("stagity_people")
-    .select("id, first_name, last_name, email, kind, active, client_name, pay_rate, bill_rate, must_change_password, monthly_pay, stagity_vendors(name)")
+    .select("id, first_name, last_name, email, kind, active, client_name, pay_rate, bill_rate, must_change_password, monthly_pay, signup_due, last_login_at, stagity_vendors(name)")
     .order("last_name");
+  const today = todayCT();
+  const withLogin = (people ?? []).filter((p) => p.active && p.email);
+  const notSignedUp = withLogin.filter((p) => p.must_change_password);
   return (
     <section className="container hr-page">
       <HrNav active="/hr/people" email={hr} />
@@ -22,6 +25,25 @@ export default async function People() {
         </div>
         <RegisterButton />
       </div>
+
+      {withLogin.length > 0 && (
+        <div className={notSignedUp.length ? "hr-notice" : "ack-ok"} style={{ marginBottom: 16 }}>
+          <strong>Portal sign-up: {withLogin.length - notSignedUp.length} of {withLogin.length} done.</strong>{" "}
+          {notSignedUp.length ? (
+            <>
+              Not signed up yet:{" "}
+              {notSignedUp.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && ", "}
+                  <Link href={`/hr/people/${p.id}`}>{p.first_name} {p.last_name}</Link>
+                  <span className="muted"> ({p.signup_due && p.signup_due >= today ? `reminded daily until ${p.signup_due}` : "reminders stopped"})</span>
+                </span>
+              ))}
+              .
+            </>
+          ) : "Everyone has signed in and set their password."}
+        </div>
+      )}
 
       {people?.length ? (
         <div className="hr-cards">
@@ -40,7 +62,7 @@ export default async function People() {
                 </Link>
                 <span className="hr-person-side">
                   <span className={`i9-badge ${!p.active ? "s-cancelled" : !p.email || !p.must_change_password ? "s-closed" : "s-section1_complete"}`}>
-                    {!p.active ? "Inactive" : !p.email ? "Active" : p.must_change_password ? "Invited" : "Active"}
+                    {!p.active ? "Inactive" : !p.email ? "Payroll only" : p.must_change_password ? "Not signed up" : "Signed up"}
                   </span>
                   {p.monthly_pay != null ? (
                     <span className="muted i9-small">Pay {money(Number(p.monthly_pay))}/mo{p.bill_rate != null ? ` · Bill ${money(Number(p.bill_rate))}/h` : ""}</span>

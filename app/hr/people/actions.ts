@@ -6,6 +6,7 @@ import { audit, db, I9_BUCKET, requireHr, siteOrigin } from "@/lib/i9/server";
 import { sendI9Task, sendWelcome } from "@/lib/i9/mail";
 import { hashPassword, tempPassword, TS_BUCKET } from "@/lib/portal/server";
 import type { ActionState } from "../actions";
+import { addDays, todayCT } from "@/lib/portal/dates";
 import { recomputeDraft, syncDraftInvoices } from "@/lib/invoices/server";
 
 const clip = (v: FormDataEntryValue | null, max = 200) => String(v ?? "").trim().slice(0, max);
@@ -151,7 +152,9 @@ export async function registerPerson(_prev: ActionState, formData: FormData): Pr
     if (dup) return { error: "Someone with that email is already registered." };
   }
 
-  const { data: p, error } = await db().from("stagity_people").insert({ ...d, email: email || null, created_by: hr }).select("*").single();
+  const dueRaw = clip(formData.get("signupDue"), 10);
+  const signupDue = email ? (isDate(dueRaw) ? dueRaw : addDays(todayCT(), 7)) : null;
+  const { data: p, error } = await db().from("stagity_people").insert({ ...d, email: email || null, created_by: hr, signup_due: signupDue }).select("*").single();
   if (error || !p) return { error: "Couldn't register. " + (error?.message ?? "") };
   await audit(null, `hr:${hr}`, "person_registered", { personId: p.id, email: email || null });
   if (noLogin) {
@@ -205,12 +208,28 @@ export async function resetPassword(_prev: ActionState, formData: FormData): Pro
   if (!p) return { error: "Not found." };
   if (!p.email) return { error: "Add their email first (Personal details), then send a login." };
   const pw = await issueTempPassword(id);
+  // A fresh temporary password gives them another week; keep a later due date if HR set one.
+  const week = addDays(todayCT(), 7);
+  await db().from("stagity_people").update({ signup_due: p.signup_due && p.signup_due > week ? p.signup_due : week }).eq("id", id);
   const sent = await sendWelcome(p.email, p.first_name, pw, `${siteOrigin()}/portal/login`, []);
   await audit(null, `hr:${hr}`, "temp_password_issued", { personId: id });
   return {
     ok: true,
     message: sent ? `New temporary password emailed to ${p.email}.` : `Email failed. Give them this temporary password: ${pw}`,
   };
+}
+
+/** Changes the date until which daily "please set up your account" reminders are sent. */
+export async function setSignupDue(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = clip(formData.get("id"), 60);
+  const due = clip(formData.get("signupDue"), 10);
+  if (due && !isDate(due)) return { error: "Enter a valid date." };
+  await db().from("stagity_people").update({ signup_due: due || null }).eq("id", id);
+  await audit(null, `hr:${hr}`, "signup_due_set", { personId: id, due: due || null });
+  revalidatePath(`/hr/people/${id}`);
+  revalidatePath("/hr/people");
+  return { ok: true, message: due ? "Saved." : "Reminders stopped." };
 }
 
 export async function setActive(formData: FormData) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { deletePerson, registerPerson, resetPassword, setPay, startI9, updatePerson } from "./actions";
+import { deletePerson, registerPerson, resetPassword, setPay, setSignupDue, startI9, updatePerson } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 import { ConfirmAction, ModalButton } from "../Modal";
@@ -21,6 +21,11 @@ type P = Partial<{
   pay_rate: number | null; start_date: string | null; end_date: string | null; adp_employee_id: string | null;
   vendor_id: string | null; bill_rate: number | null; bill_ot_rate: number | null; po_number: string | null;
 }>;
+const inDays = (n: number) => {
+  const d = new Date(Date.now() + n * 86400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 export type VendorOption = { id: string; name: string };
 
 function Fields({ p, isNew }: { p: P; isNew: boolean }) {
@@ -64,6 +69,10 @@ export function RegisterForm({ close }: { close?: () => void }) {
     <form action={action} className="i9-stack" style={{ gap: 18 }}>
       <p className="muted i9-small">They&apos;ll get an email with the portal link and a temporary password (valid 7 days).</p>
       <Fields p={{}} isNew />
+      <label className="field" style={{ maxWidth: 300 }}>
+        <span>Finish sign-up by<span className="field-hint"> (daily reminder until then)</span></span>
+        <input type="date" name="signupDue" defaultValue={inDays(7)} />
+      </label>
       <label className="i9-check"><input type="checkbox" name="startI9" defaultChecked /> Start their Form I-9 now (uses the start date as the first day of work)</label>
       <Status s={s} />
       <div className="hr-modal-actions">
@@ -134,6 +143,19 @@ export function PayForm({ id, payRate, monthlyPay }: { id: string; payRate: numb
       </div>
       <Status s={s} />
       <button className="btn btn-primary hr-btn-sm" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Save pay"}</button>
+    </form>
+  );
+}
+
+/** Date until which daily "please set up your account" reminders go out. Empty = stop. */
+export function SignupDueForm({ id, due }: { id: string; due: string }) {
+  const [s, action, pending] = useActionState(setSignupDue, {} as ActionState);
+  return (
+    <form action={action} className="i9-stack" style={{ gap: 8 }}>
+      <input type="hidden" name="id" value={id} />
+      <label className="field" style={{ maxWidth: 260 }}>Remind them daily until<input type="date" name="signupDue" defaultValue={due} /></label>
+      <Status s={s} />
+      <button className="btn btn-outline hr-btn-sm" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Save date"}</button>
     </form>
   );
 }

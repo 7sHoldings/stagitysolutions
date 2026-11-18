@@ -7,6 +7,8 @@ import { sendHrDigest, sendTimesheetReminder } from "@/lib/portal/mail";
 import { missingPeriods, monthOverview, type ConsultantRow, type SheetRow } from "@/lib/portal/timesheets";
 import { ensureDraftRun, gross, payrollCsv } from "@/lib/portal/payroll";
 import { autoSendInvoices } from "@/lib/invoices/auto";
+import { sendSignupReminder } from "@/lib/i9/mail";
+import { sendAnnouncement, type AckRow } from "@/lib/announce";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -22,6 +24,8 @@ export const maxDuration = 300;
  * 3. Vendor invoices: any invoice whose period is over and fully approved is sent automatically from accounts@
  * 4. Payroll (20th; Friday before if it's a weekend): a preview sheet 3 business days before,
  *    and the final ADP RUN sheet on the morning of the business day before payroll, emailed to accounts@
+ * 5. Portal sign-up: daily reminder (hr@) to people who haven't signed in and set a password, until their sign-up due date
+ * 6. Announcement: daily reminder to anyone who hasn't clicked "I acknowledge", until the acknowledge-by date
  */
 async function once(personId: string | null, kind: string, today: string) {
   const { error } = await db().from("stagity_reminder_log").insert({ person_id: personId, kind, sent_on: today });
@@ -168,6 +172,39 @@ export async function GET(req: Request) {
         );
       }
       log.push(`payroll-sheet:${run.id}`);
+    }
+  }
+
+  // ---- 5. Portal sign-up reminders (hr@): daily until their sign-up due date ----
+  {
+    const { data: invited } = await db()
+      .from("stagity_people")
+      .select("id, first_name, email, signup_due, temp_password_expires_at")
+      .eq("active", true)
+      .eq("must_change_password", true)
+      .not("email", "is", null)
+      .gte("signup_due", today)
+      .lt("created_at", `${today}T06:00:00Z`); // not on the day they were registered (they just got the welcome email)
+    for (const p of invited ?? []) {
+      if (needs.has(p.id)) continue; // already got a timesheet reminder today (max one email a day)
+      if (!(await once(p.id, "signup-reminder", today))) continue;
+      const tempValid = !!p.temp_password_expires_at && new Date(p.temp_password_expires_at) > new Date();
+      await sendSignupReminder(p.email!, p.first_name, `${portal}/login`, p.signup_due!, tempValid);
+      log.push(`signup-reminder:${p.email}`);
+    }
+  }
+
+  // ---- 6. Announcement: daily reminder to anyone who hasn't acknowledged, until the acknowledge-by date ----
+  {
+    const { data: pending } = await db()
+      .from("stagity_acknowledgments")
+      .select("*")
+      .is("acknowledged_at", null)
+      .not("sent_at", "is", null)
+      .gte("ack_by", today)
+      .lt("sent_at", `${today}T06:00:00Z`); // at most once a day
+    for (const r of (pending ?? []) as AckRow[]) {
+      if (await sendAnnouncement(r, "automatic")) log.push(`ack-reminder:${r.email}`);
     }
   }
 
