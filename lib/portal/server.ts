@@ -20,7 +20,6 @@ export type Person = {
   client_name: string | null;
   client_manager_name: string | null;
   client_manager_email: string | null;
-  pay_rate: number | null;
   start_date: string | null;
   end_date: string | null;
   adp_employee_id: string | null;
@@ -99,7 +98,8 @@ export async function portalPerson(): Promise<Person | null> {
   const a = Buffer.from(sign(`${id}.${ver}.${exp}`));
   const b = Buffer.from(sig);
   if (a.length !== b.length || !timingSafeEqual(a, b) || Number(exp) < Date.now()) return null;
-  const { data } = await db().from("stagity_people").select("*").eq("id", id).maybeSingle();
+  // RULE: never load pay/bill rates (or anything money-related) for the employee portal.
+  const { data } = await db().from("stagity_people").select(PORTAL_PERSON_COLUMNS).eq("id", id).maybeSingle();
   if (!data || !data.active || String(data.session_version) !== ver) return null;
   return data as Person;
 }
@@ -116,3 +116,10 @@ export async function requirePerson(opts: { allowIncomplete?: boolean } = {}): P
   return p;
 }
 export const TS_BUCKET = "timesheets";
+
+/**
+ * The only person fields the employee portal may load. Deliberately excludes pay_rate, bill_rate,
+ * bill_ot_rate, monthly_pay, vendor, PO and payment terms: consultants must never see rates.
+ */
+const PORTAL_PERSON_COLUMNS =
+  "id, first_name, last_name, email, phone, kind, active, must_change_password, temp_password_expires_at, session_version, client_name, client_manager_name, client_manager_email, start_date, end_date, adp_employee_id, address_line1, address_line2, city, state, zip, emergency_name, emergency_relationship, emergency_phone, profile_completed_at";

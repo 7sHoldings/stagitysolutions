@@ -13,7 +13,11 @@ export async function signIn(_prev: FormState, formData: FormData): Promise<Form
   const fail = { error: "Email or password is incorrect." };
   if (!email || !password) return fail;
 
-  const { data: p } = await db().from("stagity_people").select("*").eq("email", email).maybeSingle();
+  const { data: p } = await db()
+    .from("stagity_people")
+    .select("id, active, locked_until, password_hash, failed_logins, must_change_password, temp_password_expires_at, session_version")
+    .eq("email", email)
+    .maybeSingle();
   if (!p || !p.active) {
     await checkPassword(password, "scrypt.AAAAAAAAAAAAAAAAAAAAAA==.AAAA"); // even out timing
     return fail;

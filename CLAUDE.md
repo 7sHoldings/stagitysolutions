@@ -10,6 +10,7 @@
 - The owner follows along on a phone and isn't a developer. Explain results in plain language and check mobile layouts.
 
 ## HR & employee portals (`/hr`, `/portal`)
+- **THUMB RULE (owner): consultants must NEVER see a bill rate, at any time.** Don't show pay rates either. No rates, margins, invoice amounts or payroll amounts in anything consultant-facing: portal pages, props/data sent to the browser, server-action responses, or emails to consultants. `portalPerson()` loads only `PORTAL_PERSON_COLUMNS` (no rate fields); keep it that way. Rates are admin-only (`/hr`, invoices to vendors, payroll sheet to accounts@).
 - All portal tables use RLS with **no policies**. Only the server, using `SUPABASE_SECRET_KEY` via `db()` in `lib/i9/server.ts`, can access them. Never add anon/authenticated policies or expose these tables to the browser.
 - Form I-9 data (incl. SSN) is encrypted with `I9_ENCRYPTION_KEY` (`encryptJson`/`decryptJson`). Never change or rotate that key without migrating existing records.
 - Audit important actions with `audit()`. `stagity_i9_audit` is append-only.
