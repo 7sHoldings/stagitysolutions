@@ -1,17 +1,39 @@
 import "server-only";
 import nodemailer from "nodemailer";
+import { company } from "@/lib/content";
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-function transport() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS?.replace(/\s+/g, "");
+/**
+ * Mailboxes the site sends from.
+ *   hr          — logins, I-9, welcome emails (SMTP_USER / SMTP_PASS)
+ *   timesheets  — timesheet reminders and approval/rejection emails to consultants
+ *   accounts    — vendor invoices
+ * Each mailbox can have its own Google App Password (TIMESHEETS_SMTP_PASS, ACCOUNTS_SMTP_PASS).
+ * If it doesn't, the email is sent through the HR account with that address as the sender, which works
+ * when the address is set up under "Send mail as" in the HR Gmail settings (or is an alias of it).
+ */
+export type Mailbox = "hr" | "timesheets" | "accounts";
+
+export function mailboxAddress(box: Mailbox): string {
+  if (box === "timesheets") return company.timesheetsEmail;
+  if (box === "accounts") return company.accountsEmail;
+  return process.env.SMTP_USER || company.email;
+}
+
+const mailboxName: Record<Mailbox, string> = {
+  hr: "Stagity Solutions HR",
+  timesheets: "Stagity Solutions Timesheets",
+  accounts: "Stagity Solutions Accounts",
+};
+
+function transport(box: Mailbox) {
+  const own = box === "timesheets" ? process.env.TIMESHEETS_SMTP_PASS : box === "accounts" ? process.env.ACCOUNTS_SMTP_PASS : undefined;
+  const user = own ? mailboxAddress(box) : process.env.SMTP_USER;
+  const pass = (own ?? process.env.SMTP_PASS)?.replace(/\s+/g, "");
   if (!user || !pass) return null;
-  return {
-    user,
-    t: nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass } }),
-  };
+  return nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user, pass } });
 }
 
 /** Returns false if email isn't configured or sending failed. */
@@ -20,6 +42,8 @@ export type MailExtras = {
   bcc?: string[];
   attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string }[];
   signature?: string;
+  from?: Mailbox;
+  replyTo?: string;
 };
 
 export async function send(
@@ -29,11 +53,13 @@ export async function send(
   button?: { label: string; href: string },
   extras: MailExtras = {},
 ) {
-  const tr = transport();
+  const box = extras.from ?? "hr";
+  const tr = transport(box);
   if (!tr) {
-    console.warn("I-9 mail skipped: SMTP_USER / SMTP_PASS not set.");
+    console.warn("Mail skipped: SMTP settings not set.");
     return false;
   }
+  const signature = extras.signature ?? mailboxName[box];
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#0b1220;max-width:560px">
     ${paragraphs.map((p) => `<p style="margin:0 0 14px">${esc(p)}</p>`).join("")}
     ${
@@ -42,11 +68,12 @@ export async function send(
            <p style="margin:0 0 14px;color:#5b6577;font-size:13px">Or paste this link into your browser: ${esc(button.href)}</p>`
         : ""
     }
-    <p style="margin-top:22px;color:#5b6577;font-size:13px">${esc(extras.signature ?? "Stagity Solutions HR")}</p></div>`;
+    <p style="margin-top:22px;color:#5b6577;font-size:13px">${esc(signature)}</p></div>`;
   const text = paragraphs.join("\n\n") + (button ? `\n\n${button.label}: ${button.href}\n` : "");
   try {
-    await tr.t.sendMail({
-      from: `"${extras.signature ?? "Stagity Solutions HR"}" <${tr.user}>`,
+    await tr.sendMail({
+      from: `"${mailboxName[box]}" <${mailboxAddress(box)}>`,
+      replyTo: extras.replyTo,
       to,
       cc: extras.cc?.length ? extras.cc : undefined,
       bcc: extras.bcc?.length ? extras.bcc : undefined,
@@ -57,7 +84,7 @@ export async function send(
     });
     return true;
   } catch (e) {
-    console.error("I-9 mail failed:", e);
+    console.error("Mail failed:", e);
     return false;
   }
 }

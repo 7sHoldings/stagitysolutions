@@ -1,11 +1,12 @@
 import "server-only";
 import { send } from "@/lib/i9/mail";
+import { company } from "@/lib/content";
 import { db, siteOrigin } from "@/lib/i9/server";
 import { TS_BUCKET } from "./server";
 import { dayName, periodFor, periodLabel } from "./dates";
 
 export function sendTimesheetReminder(to: string, firstName: string, subject: string, lines: string[], link: string) {
-  return send(to, subject, [`Hi ${firstName},`, ...lines], { label: "Submit timesheet", href: link });
+  return send(to, subject, [`Hi ${firstName},`, ...lines, `Questions? Reply to this email or write to ${company.timesheetsEmail}.`], { label: "Submit timesheet", href: link }, { from: "timesheets", replyTo: company.timesheetsEmail });
 }
 
 export function sendTimesheetReviewed(to: string, firstName: string, week: string, approved: boolean, note: string, link: string) {
@@ -16,26 +17,21 @@ export function sendTimesheetReviewed(to: string, firstName: string, week: strin
       ? [`Hi ${firstName},`, `Your timesheet for ${week} has been approved. Thank you!`, ...(note ? [`Note from HR: ${note}`] : [])]
       : [`Hi ${firstName},`, `Your timesheet for ${week} was not approved.`, `Reason: ${note}`, "Please correct it, upload the client-approved timesheet, and submit again."],
     { label: "Open timesheet", href: link },
+    { from: "timesheets", replyTo: company.timesheetsEmail },
   );
 }
 
+/** Internal summary emails (to the timesheets or accounts inbox). */
 export function sendHrDigest(to: string, subject: string, lines: string[], link: string) {
-  return send(to, subject, lines, { label: "Open HR portal", href: link });
-}
-
-/** Who gets "timesheet submitted" emails: ACCOUNTS_EMAILS if set, otherwise HR_EMAILS. */
-function accountsTeam(): string[] {
-  const list = (process.env.ACCOUNTS_EMAILS || process.env.HR_EMAILS || "").split(",").map((e) => e.trim()).filter(Boolean);
-  return [...new Set(list)];
+  return send(to, subject, lines, { label: "Open HR portal", href: link }, { signature: "Stagity Solutions Portal" });
 }
 
 /**
- * Emails the accounts team when a consultant submits a timesheet, with the uploaded
+ * Emails the timesheets inbox when a consultant submits a timesheet, with the uploaded
  * client-approved timesheet attached and a link to approve or reject it in the HR portal.
  */
 export async function notifyTimesheetSubmitted(timesheetId: string) {
-  const to = accountsTeam();
-  if (!to.length) return;
+  const to = [company.timesheetsEmail];
   const { data: s } = await db()
     .from("stagity_timesheets")
     .select("id, week_start, total_hours, notes, submitted_at, stagity_people(first_name, last_name, email, client_name)")
@@ -78,7 +74,7 @@ export async function notifyTimesheetSubmitted(timesheetId: string) {
         "Check that it shows the client's approval and matching hours, then approve or reject it in the HR portal. The consultant is emailed either way.",
       ],
       { label: "Review in HR portal", href: link },
-      { attachments, signature: "Stagity Solutions Portal" },
+      { attachments, signature: "Stagity Solutions Portal", replyTo: p.email },
     );
   }
 }

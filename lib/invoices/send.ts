@@ -1,5 +1,5 @@
 import "server-only";
-import { audit, db, hrEmails } from "@/lib/i9/server";
+import { audit, db } from "@/lib/i9/server";
 import { send } from "@/lib/i9/mail";
 import { TS_BUCKET } from "@/lib/portal/server";
 import { addDays, weekStartOf, money, monthLabel, shortDate, todayCT } from "@/lib/portal/dates";
@@ -124,11 +124,11 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
       `Please find attached invoice ${number} for ${consultant}'s services for ${periodLabel(inv.period_start, inv.period_end)} (${mdY(inv.period_start)} to ${mdY(inv.period_end)}).`,
       `Total: ${money(Number(inv.total))} (${Number(inv.regular_hours) + Number(inv.overtime_hours)} hours × ${money(Number(inv.bill_rate))}).${inv.po_number ? ` PO/reference: ${inv.po_number}.` : ""}`,
       ...(vendor.attach_timesheets ? ["The client-approved timesheets for this period are attached."] : []),
-      `If you have any questions, please reach out to ${company.accountsEmail} or ${company.phone}.`,
+      `If you have any questions, please reach out to ${company.invoiceQuestionsEmail} or ${company.phone}.`,
       "Thank you.",
     ],
     undefined,
-    { cc, bcc: hrEmails(), attachments, signature: `${company.name} Accounts` },
+    { cc, bcc: [company.accountsEmail], attachments, from: "accounts", replyTo: company.invoiceQuestionsEmail },
   );
   if (!ok) {
     await db().from("stagity_invoices").update({ number: inv.number }).eq("id", id).eq("status", "draft");

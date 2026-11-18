@@ -45,6 +45,14 @@ The chat bubble answers from the question bank in `lib/faq.ts` — no AI service
 
 Every question typed in the chat is logged to `stagity_chat_questions`. Check rows where `answered = false` to see what to add to the FAQ next.
 
+## Email addresses (`lib/content.ts`)
+
+| Address | Sends | Receives |
+| --- | --- | --- |
+| timesheets@stagitysolutions.com | timesheet reminders, approved/rejected emails to consultants | "timesheet submitted" emails with the attachment, missing-timesheet summary (6th) |
+| accounts@stagitysolutions.com | vendor invoices | a copy of every invoice, the ADP payroll sheet (preview + final), invoice failures |
+| hr@stagitysolutions.com | HR sign-in codes, welcome/temporary passwords, Form I-9 | vendor questions about invoices (printed on invoices; invoice reply-to) |
+
 ## HR portal (`/hr`) and employee portal (`/portal`)
 
 Private pages, not linked from the public site and blocked from search engines.
@@ -62,7 +70,7 @@ that file and re-check the field names in `lib/i9/pdf.ts`.
 **Timesheets.** Consultants enter hours for every weekday (0 for holidays/days off; weekends optional) and upload the timesheet their client
 approved. Timesheets cover a Sun–Sat week **split at month end** (e.g. Sun Aug 30–Mon Aug 31 is one period, Tue Sep 1–Sat Sep 5 the next), so each month can be
 completed on its own. Uploading the client-approved timesheet (screenshot or PDF) is required, and notes for HR are optional.
-When a consultant submits, the accounts team (`ACCOUNTS_EMAILS`, default `HR_EMAILS`) gets an email with the hours and the uploaded approved
+When a consultant submits, the timesheets inbox gets an email with the hours and the uploaded approved
 timesheet attached. HR opens it in the portal and approves (consultant emailed; hours flow to the vendor invoice and payroll) or rejects with a
 comment (consultant emailed the reason). Overtime (over 40 h per Sun–Sat workweek, across a split) is calculated automatically.
 
@@ -88,5 +96,5 @@ Gmail account to the vendor with the PDF and the approved timesheets attached (H
 `stagity_hr_login_codes`; private storage buckets `i9-documents` and `timesheets`. RLS is on with no policies, so only the server (secret key)
 can access them. I-9 data (including SSN) is encrypted with AES-256-GCM before it's stored; passwords are hashed with scrypt.
 
-**Environment variables:** `SUPABASE_SECRET_KEY`, `I9_ENCRYPTION_KEY`, `I9_SESSION_SECRET`, `HR_EMAILS`, `CRON_SECRET`, optional `ACCOUNTS_EMAILS` (plus the existing
+**Environment variables:** `SUPABASE_SECRET_KEY`, `I9_ENCRYPTION_KEY`, `I9_SESSION_SECRET`, `HR_EMAILS`, `CRON_SECRET`, optional `TIMESHEETS_SMTP_PASS` / `ACCOUNTS_SMTP_PASS` (plus the existing
 `SUPABASE_URL` and `SMTP_*`). Back up `I9_ENCRYPTION_KEY` somewhere safe: without it, stored I-9 records can't be decrypted.

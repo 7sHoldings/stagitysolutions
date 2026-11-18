@@ -5,8 +5,12 @@ export const company = {
   phone: "+1 (469) 547-1010",
   phoneHref: "tel:+14695471010",
   email: "hr@stagitysolutions.com",
-  /** Shown on vendor invoices for billing questions. */
-  accountsEmail: "hr@stagitysolutions.com",
+  /** Contact printed on vendor invoices for questions; vendor replies to invoice emails go here. */
+  invoiceQuestionsEmail: "hr@stagitysolutions.com",
+  /** Sends vendor invoices and receives the ADP payroll sheet. */
+  accountsEmail: "accounts@stagitysolutions.com",
+  /** Sends timesheet reminders to consultants and receives submitted timesheets. */
+  timesheetsEmail: "timesheets@stagitysolutions.com",
   addressLine1: "4101 McEwen Rd, Suite 517",
   addressLine2: "Dallas, TX 75244",
   url: "https://stagitysolutions.com",

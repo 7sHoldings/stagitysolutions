@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
-import { db, hrEmails, siteOrigin } from "@/lib/i9/server";
+import { db, siteOrigin } from "@/lib/i9/server";
+import { company } from "@/lib/content";
 import { send } from "@/lib/i9/mail";
 import { addDays, addMonths, deadlineFor, money, monthLabel, monthStart, payDateFor, payrollSheetDate, periodFor, periodLabel, todayCT, weekStartOf, type Period } from "@/lib/portal/dates";
 import { sendHrDigest, sendTimesheetReminder } from "@/lib/portal/mail";
@@ -17,10 +18,10 @@ export const maxDuration = 300;
  *    Tuesday              → invite to fill last week (Sun–Sat) + upload the approved screenshot
  *    Wednesday–Friday     → again, if last week still isn't submitted
  *    Every 2 days         → anything missing for last month (1st, 3rd, 5th = deadline, 7th, …) until it's in
- * 2. HR summary on the 6th (who missed the deadline)
- * 3. Vendor invoices: any invoice whose period is over and fully approved is sent automatically
+ * 2. Summary to the timesheets inbox on the 6th (who missed the deadline)
+ * 3. Vendor invoices: any invoice whose period is over and fully approved is sent automatically from accounts@
  * 4. Payroll (20th; Friday before if it's a weekend): a preview sheet 3 business days before,
- *    and the final ADP RUN sheet on the morning of the business day before payroll
+ *    and the final ADP RUN sheet on the morning of the business day before payroll, emailed to accounts@
  */
 async function once(personId: string | null, kind: string, today: string) {
   const { error } = await db().from("stagity_reminder_log").insert({ person_id: personId, kind, sent_on: today });
@@ -107,7 +108,7 @@ export async function GET(req: Request) {
       .map((p) => ({ p, periods: missingPeriods(p, lastMonth, sheet) }))
       .filter((x) => x.periods.length);
     const { count: toReview } = await db().from("stagity_timesheets").select("id", { count: "exact", head: true }).eq("status", "submitted");
-    for (const to of hrEmails()) {
+    for (const to of [company.timesheetsEmail]) {
       if (!(await once(null, `hr-digest:${to}`, today))) continue;
       await sendHrDigest(to, `${monthLabel(lastMonth)} timesheets: ${missing.length} consultant${missing.length === 1 ? "" : "s"} still missing`, [
         missing.length
@@ -124,7 +125,7 @@ export async function GET(req: Request) {
     const inv = await autoSendInvoices();
     log.push(...inv.sent.map((m) => `invoice:${m}`), ...inv.failed.map((m) => `invoice-failed:${m}`));
     if (inv.failed.length && (await once(null, "invoice-failures", today))) {
-      for (const to of hrEmails()) {
+      for (const to of [company.accountsEmail]) {
         await sendHrDigest(to, "Some vendor invoices couldn't be sent automatically", [
           `${inv.failed.length} invoice(s) are complete but couldn't be sent. Open the Invoices page to see them and send manually.`,
         ], `${siteOrigin()}/hr/invoices`);
@@ -150,7 +151,7 @@ export async function GET(req: Request) {
       const { consultants, sheet } = await monthOverview(lastMonth);
       const missing = consultants.filter((c) => c.active && missingPeriods(c, lastMonth, sheet).length).map((c) => `${c.first_name} ${c.last_name}`);
       const noAdp = items.filter((i) => !(i.stagity_people as { adp_employee_id: string | null }).adp_employee_id).length;
-      for (const to of hrEmails()) {
+      for (const to of [company.accountsEmail]) {
         await send(
           to,
           finalSheet ? `ADP payroll sheet for ${monthLabel(lastMonth)}: upload today before 3 PM (pays ${run.pay_date})` : `Payroll preview for ${monthLabel(lastMonth)} (pays ${run.pay_date})`,
@@ -163,7 +164,7 @@ export async function GET(req: Request) {
               : `This is a preview. It updates as more timesheets are approved; the final sheet arrives on the morning of ${sheetDay}.`,
           ],
           { label: "Open payroll", href: `${siteOrigin()}/hr/payroll/${run.id}` },
-          { attachments: [{ filename, content: Buffer.from(body), contentType: "text/csv" }] },
+          { attachments: [{ filename, content: Buffer.from(body), contentType: "text/csv" }], signature: "Stagity Solutions Portal" },
         );
       }
       log.push(`payroll-sheet:${run.id}`);

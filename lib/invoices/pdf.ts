@@ -174,7 +174,7 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
   // Questions
   const ask: [string, PDFFont][] = [
     ["If you have any questions, please reach out to ", font],
-    [company.accountsEmail, bold],
+    [company.invoiceQuestionsEmail, bold],
     [" or ", font],
     [company.phone, bold],
     [".", font],
