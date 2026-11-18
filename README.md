@@ -74,7 +74,7 @@ marked paid so they can't be paid twice) and downloads the CSV for **ADP RUN** i
 
 **Vendor invoices.** Each consultant has a vendor (Vendors page: AP email, CC, address, payment terms, weekly or monthly billing)
 and a bill rate (and optional PO number) on their profile. Invoices show one line: all hours worked (regular + overtime) × bill rate = total. Approving a timesheet adds its hours to a draft invoice for that
-billing period. HR previews the PDF and clicks **Approve & send**: the invoice gets its number (year + month of the service period + running number, e.g. `20260901`), and it's emailed from the HR
+billing period. HR previews the PDF and clicks **Approve & send**: the invoice gets its number (the date it is raised, YYYYMMDD, e.g. August hours invoiced on Sept 1, 2026 → `20260901`; a second invoice that day gets `-2`), and it's emailed from the HR
 Gmail account to the vendor with the PDF and the approved timesheets attached (HR gets a bcc). Then mark it paid, or void and reissue it.
 
 **Data:** `stagity_vendors`, `stagity_invoices`, `stagity_settings`, `stagity_people`, `stagity_timesheets`, `stagity_timesheet_days`, `stagity_timesheet_files`, `stagity_payroll_runs`,

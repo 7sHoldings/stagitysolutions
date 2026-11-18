@@ -62,15 +62,17 @@ export function periodLabel(start: string, end: string) {
 }
 
 /**
- * Next invoice number in Stagity's format: year + month of the service period + running number,
- * e.g. 20260901, 20260902 for September 2026.
+ * Invoice number = the date the invoice is raised, YYYYMMDD (e.g. August hours invoiced on
+ * September 1, 2026 → 20260901). A second invoice raised the same day gets -2, then -3, …
  */
-async function nextInvoiceNumber(periodStart: string): Promise<string> {
-  const prefix = periodStart.slice(0, 4) + periodStart.slice(5, 7);
-  const { data } = await db().from("stagity_invoices").select("number").like("number", `${prefix}%`);
-  const used = (data ?? []).map((r) => Number(r.number.slice(prefix.length))).filter(Number.isFinite);
-  const next = (used.length ? Math.max(...used) : 0) + 1;
-  return prefix + String(next).padStart(2, "0");
+async function nextInvoiceNumber(issueDate: string): Promise<string> {
+  const base = issueDate.replace(/-/g, "");
+  const { data } = await db().from("stagity_invoices").select("number").like("number", `${base}%`);
+  const used = new Set((data ?? []).map((r) => r.number));
+  if (!used.has(base)) return base;
+  let n = 2;
+  while (used.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
 }
 
 /** Approves a draft: assigns the invoice number, builds the PDF and emails it to the vendor. */
@@ -83,11 +85,11 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   if (!vendor.active) return { error: `${vendor.name} is marked inactive.` };
   if (Number(inv.total) <= 0) return { error: "The invoice total is $0. Check the consultant's bill rate." };
 
-  const number = await nextInvoiceNumber(inv.period_start);
+  const issue = todayCT();
+  const number = await nextInvoiceNumber(issue);
   // Reserve the number now (unique), so two sends can't take the same one.
   const { error: reserveErr } = await db().from("stagity_invoices").update({ number }).eq("id", id).eq("status", "draft");
   if (reserveErr) return { error: "Couldn't assign an invoice number. Please try again." };
-  const issue = todayCT();
   const due = addDays(issue, vendor.payment_terms_days);
   const ready: Loaded = { ...loaded, inv: { ...inv, number, issue_date: issue, due_date: due, status: "sent" } };
   const pdf = await buildInvoicePdf({ ...(await pdfData(ready)), draft: false });
