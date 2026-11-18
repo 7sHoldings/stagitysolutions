@@ -7,6 +7,8 @@ import { company } from "@/lib/content";
 import { buildInvoicePdf, type InvoicePdfData } from "./pdf";
 import { getSetting, recomputeDraft, type Invoice, type Vendor } from "./server";
 
+const mdY = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(0, 4)}`;
+
 type Loaded = { inv: Invoice; vendor: Vendor; person: { first_name: string; last_name: string; client_name: string | null } };
 
 export async function loadInvoice(id: string): Promise<Loaded | null> {
@@ -108,11 +110,11 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   const cc = (vendor.cc_emails ?? "").split(",").map((e) => e.trim()).filter(Boolean);
   const ok = await send(
     vendor.ap_email,
-    `Invoice ${number}: ${consultant}, ${inv.period_start} to ${inv.period_end}`,
+    `Invoice ${number}: ${consultant}, ${periodLabel(inv.period_start, inv.period_end)}`,
     [
       "Hello,",
-      `Please find attached invoice ${number} for ${consultant}'s services${person.client_name ? ` at ${person.client_name}` : ""} from ${inv.period_start} to ${inv.period_end}.`,
-      `Amount due: ${money(Number(inv.total))}, due by ${due}.${inv.po_number ? ` PO/reference: ${inv.po_number}.` : ""}`,
+      `Please find attached invoice ${number} for ${consultant}'s services${person.client_name ? ` at ${person.client_name}` : ""} for ${periodLabel(inv.period_start, inv.period_end)} (${mdY(inv.period_start)} to ${mdY(inv.period_end)}).`,
+      `Amount due: ${money(Number(inv.total))}, due by ${mdY(due)}.${inv.po_number ? ` PO/reference: ${inv.po_number}.` : ""}`,
       ...(vendor.attach_timesheets ? ["The client-approved timesheets for this period are attached."] : []),
       `Please reply to this email or contact ${company.email} with any questions.`,
       "Thank you.",
