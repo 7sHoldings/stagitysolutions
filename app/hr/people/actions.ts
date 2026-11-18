@@ -5,14 +5,18 @@ import { audit, db, requireHr, siteOrigin } from "@/lib/i9/server";
 import { sendI9Task, sendWelcome } from "@/lib/i9/mail";
 import { hashPassword, tempPassword } from "@/lib/portal/server";
 import type { ActionState } from "../actions";
+import { recomputeDraft, syncDraftInvoices } from "@/lib/invoices/server";
 
 const clip = (v: FormDataEntryValue | null, max = 200) => String(v ?? "").trim().slice(0, max);
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 const TEMP_DAYS = 7;
 
+const num = (v: string) => (v ? Number(v) : null);
+
 function details(formData: FormData) {
   const rate = clip(formData.get("payRate"), 12);
+  const consultant = clip(formData.get("kind"), 20) !== "employee";
   return {
     first_name: clip(formData.get("first"), 80),
     last_name: clip(formData.get("last"), 80),
@@ -25,6 +29,10 @@ function details(formData: FormData) {
     start_date: clip(formData.get("startDate"), 10) || null,
     end_date: clip(formData.get("endDate"), 10) || null,
     adp_employee_id: clip(formData.get("adpId"), 30) || null,
+    vendor_id: consultant ? clip(formData.get("vendorId"), 60) || null : null,
+    bill_rate: consultant ? num(clip(formData.get("billRate"), 12)) : null,
+    bill_ot_rate: consultant ? num(clip(formData.get("billOtRate"), 12)) : null,
+    po_number: consultant ? clip(formData.get("poNumber"), 80) || null : null,
   };
 }
 
@@ -32,6 +40,7 @@ function problem(d: ReturnType<typeof details>): string | null {
   if (!d.first_name || !d.last_name) return "Enter first and last name.";
   if (d.pay_rate !== null && (!Number.isFinite(d.pay_rate) || d.pay_rate < 0 || d.pay_rate > 10000)) return "Enter a valid hourly rate.";
   if (d.kind === "consultant" && d.pay_rate === null) return "Enter the consultant's hourly pay rate.";
+  for (const r of [d.bill_rate, d.bill_ot_rate]) if (r !== null && (!Number.isFinite(r) || r < 0 || r > 10000)) return "Enter a valid bill rate.";
   if (d.client_manager_email && !emailOk(d.client_manager_email)) return "Enter a valid client manager email.";
   if ((d.start_date && !isDate(d.start_date)) || (d.end_date && !isDate(d.end_date))) return "Enter valid dates.";
   return null;
@@ -106,6 +115,9 @@ export async function updatePerson(_prev: ActionState, formData: FormData): Prom
   const { error } = await db().from("stagity_people").update(d).eq("id", id);
   if (error) return { error: error.message };
   await audit(null, `hr:${hr}`, "person_updated", { personId: id });
+  await syncDraftInvoices(id); // new vendor/bill rate applies to open drafts
+  const { data: drafts } = await db().from("stagity_invoices").select("id").eq("person_id", id).eq("status", "draft");
+  for (const dr of drafts ?? []) await recomputeDraft(dr.id);
   revalidatePath(`/hr/people/${id}`);
   return { ok: true, message: "Saved." };
 }

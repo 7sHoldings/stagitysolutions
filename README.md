@@ -72,7 +72,13 @@ HR approves or sends back with a note. Overtime (over 40 h/week) is calculated a
 **Payroll.** HR calculates the month's payroll (approved hours × rate, overtime × 1.5), adds bonuses or reimbursements, locks it (hours are
 marked paid so they can't be paid twice) and downloads the CSV for **ADP RUN** import. ADP calculates taxes, deductions and net pay.
 
-**Data:** `stagity_people`, `stagity_timesheets`, `stagity_timesheet_days`, `stagity_timesheet_files`, `stagity_payroll_runs`,
+**Vendor invoices.** Each consultant has a vendor (Vendors page: AP email, CC, address, payment terms, weekly or monthly billing)
+and a bill rate (optional overtime bill rate and PO number) on their profile. Approving a timesheet adds its hours to a draft invoice for that
+billing period. HR previews the PDF and clicks **Approve & send**: the invoice gets its number (`STG-YYYY-####`), and it's emailed from the HR
+Gmail account to the vendor with the PDF and the approved timesheets attached (HR gets a bcc). Then mark it paid, or void and reissue it.
+Payment instructions printed on invoices are set at the bottom of the Invoices page.
+
+**Data:** `stagity_vendors`, `stagity_invoices`, `stagity_settings`, `stagity_people`, `stagity_timesheets`, `stagity_timesheet_days`, `stagity_timesheet_files`, `stagity_payroll_runs`,
 `stagity_payroll_items`, `stagity_reminder_log`, `stagity_i9_cases`, `stagity_i9_documents`, `stagity_i9_audit` (append-only),
 `stagity_hr_login_codes`; private storage buckets `i9-documents` and `timesheets`. RLS is on with no policies, so only the server (secret key)
 can access them. I-9 data (including SSN) is encrypted with AES-256-GCM before it's stored; passwords are hashed with scrypt.

@@ -5,7 +5,9 @@ const tabs = [
   { href: "/hr", label: "Overview" },
   { href: "/hr/people", label: "People" },
   { href: "/hr/timesheets", label: "Timesheets" },
+  { href: "/hr/invoices", label: "Invoices" },
   { href: "/hr/payroll", label: "Payroll" },
+  { href: "/hr/vendors", label: "Vendors" },
   { href: "/hr/i9", label: "Form I-9" },
 ];
 

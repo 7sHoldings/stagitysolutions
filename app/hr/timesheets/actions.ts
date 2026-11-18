@@ -6,6 +6,7 @@ import { sendTimesheetReminder, sendTimesheetReviewed } from "@/lib/portal/mail"
 import { deadlineFor, monthLabel, weekLabel } from "@/lib/portal/dates";
 import { missingWeeks, monthOverview } from "@/lib/portal/timesheets";
 import type { ActionState } from "../actions";
+import { releaseTimesheet, syncDraftInvoices } from "@/lib/invoices/server";
 
 export async function reviewTimesheet(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
@@ -21,6 +22,10 @@ export async function reviewTimesheet(_prev: ActionState, formData: FormData): P
     const { count } = await db().from("stagity_timesheet_days").select("id", { count: "exact", head: true }).eq("timesheet_id", id).not("payroll_run_id", "is", null);
     if (count) return { error: "These hours are already in a payroll run. Fix it with a payroll adjustment instead." };
   }
+  if (decision === "reject") {
+    const blocked = await releaseTimesheet(id);
+    if (blocked) return { error: blocked };
+  }
   const approved = decision === "approve";
   await db()
     .from("stagity_timesheets")
@@ -29,9 +34,15 @@ export async function reviewTimesheet(_prev: ActionState, formData: FormData): P
   await audit(null, `hr:${hr}`, approved ? "timesheet_approved" : "timesheet_rejected", { timesheetId: id, note: note || null });
   const person = s.stagity_people as { first_name: string; email: string };
   await sendTimesheetReviewed(person.email, person.first_name, weekLabel(s.week_start), approved, note, `${siteOrigin()}/portal/timesheets/${s.week_start}`);
+  let invoiceNote = "";
+  if (approved) {
+    const reason = await syncDraftInvoices(s.person_id);
+    invoiceNote = reason ? ` Not invoiced: ${reason.toLowerCase()} for this consultant (People page).` : " Added to a draft vendor invoice.";
+  }
   revalidatePath("/hr/timesheets");
   revalidatePath(`/hr/timesheets/${id}`);
-  return { ok: true, message: approved ? "Approved." : "Sent back to the consultant." };
+  revalidatePath("/hr/invoices");
+  return { ok: true, message: approved ? `Approved.${invoiceNote}` : "Sent back to the consultant." };
 }
 
 export async function remindConsultant(_prev: ActionState, formData: FormData): Promise<ActionState> {

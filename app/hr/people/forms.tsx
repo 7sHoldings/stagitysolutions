@@ -9,9 +9,11 @@ type P = Partial<{
   id: string; first_name: string; last_name: string; email: string; phone: string | null; kind: string;
   client_name: string | null; client_manager_name: string | null; client_manager_email: string | null;
   pay_rate: number | null; start_date: string | null; end_date: string | null; adp_employee_id: string | null;
+  vendor_id: string | null; bill_rate: number | null; bill_ot_rate: number | null; po_number: string | null;
 }>;
+export type VendorOption = { id: string; name: string };
 
-function Fields({ p, isNew }: { p: P; isNew: boolean }) {
+function Fields({ p, isNew, vendors }: { p: P; isNew: boolean; vendors: VendorOption[] }) {
   const [kind, setKind] = useState(p.kind ?? "consultant");
   return (
     <>
@@ -36,19 +38,28 @@ function Fields({ p, isNew }: { p: P; isNew: boolean }) {
           <label className="field">Client<input name="clientName" defaultValue={p.client_name ?? ""} /></label>
           <label className="field">Client manager<input name="managerName" defaultValue={p.client_manager_name ?? ""} /></label>
           <label className="field">Client manager email<input name="managerEmail" type="email" defaultValue={p.client_manager_email ?? ""} /></label>
+          <label className="field">Vendor (who you invoice)
+            <select name="vendorId" defaultValue={p.vendor_id ?? ""}>
+              <option value="">— none —</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </label>
+          <label className="field">Bill rate to vendor ($/h)<input name="billRate" type="number" step="0.01" min="0" defaultValue={p.bill_rate ?? ""} /></label>
+          <label className="field">Overtime bill rate ($/h, optional)<input name="billOtRate" type="number" step="0.01" min="0" defaultValue={p.bill_ot_rate ?? ""} placeholder="Same as bill rate" /></label>
+          <label className="field">PO / reference number<input name="poNumber" defaultValue={p.po_number ?? ""} /></label>
         </div>
       )}
     </>
   );
 }
 
-export function RegisterForm() {
+export function RegisterForm({ vendors }: { vendors: VendorOption[] }) {
   const [s, action, pending] = useActionState(registerPerson, {} as ActionState);
   return (
     <form action={action} className="form-card" key={s.ok ? s.message : "new"}>
       <h2 className="i9-h3">Register a person</h2>
       <p className="muted i9-small">They&apos;ll get an email with the portal link and a temporary password (valid 7 days).</p>
-      <Fields p={{}} isNew />
+      <Fields p={{}} isNew vendors={vendors} />
       <label className="i9-check"><input type="checkbox" name="startI9" defaultChecked /> Start their Form I-9 now (uses the start date as the first day of work)</label>
       <Status s={s} />
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Registering…" : "Register and send login"}</button>
@@ -56,13 +67,13 @@ export function RegisterForm() {
   );
 }
 
-export function EditPersonForm({ p }: { p: P }) {
+export function EditPersonForm({ p, vendors }: { p: P; vendors: VendorOption[] }) {
   const [s, action, pending] = useActionState(updatePerson, {} as ActionState);
   return (
     <form action={action} className="form-card">
       <input type="hidden" name="id" value={p.id} />
       <h2 className="i9-h3">Details</h2>
-      <Fields p={p} isNew={false} />
+      <Fields p={p} isNew={false} vendors={vendors} />
       <Status s={s} />
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Save"}</button>
     </form>

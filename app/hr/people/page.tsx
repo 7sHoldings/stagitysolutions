@@ -6,6 +6,7 @@ import { RegisterForm } from "./forms";
 
 export default async function People() {
   const hr = await requireHr();
+  const { data: vendors } = await db().from("stagity_vendors").select("id, name").eq("active", true).order("name");
   const { data: people } = await db()
     .from("stagity_people")
     .select("id, first_name, last_name, email, kind, active, client_name, pay_rate, must_change_password, last_login_at")
@@ -14,7 +15,7 @@ export default async function People() {
     <section className="container i9-page">
       <HrNav active="/hr/people" email={hr} />
       <h1 className="h2">People</h1>
-      <RegisterForm />
+      <RegisterForm vendors={vendors ?? []} />
       <div className="i9-table-wrap">
         <table className="i9-table">
           <thead><tr><th>Name</th><th>Type</th><th>Client</th><th className="i9-num">Rate</th><th>Account</th></tr></thead>

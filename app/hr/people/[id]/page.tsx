@@ -13,9 +13,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const { data: p } = await db().from("stagity_people").select("*").eq("id", id).maybeSingle();
   if (!p) notFound();
-  const [{ data: i9 }, { data: sheets }] = await Promise.all([
+  const [{ data: i9 }, { data: sheets }, { data: vendors }] = await Promise.all([
     db().from("stagity_i9_cases").select("id, status").eq("person_id", id).neq("status", "cancelled").limit(1).maybeSingle(),
     db().from("stagity_timesheets").select("id, week_start, status, total_hours").eq("person_id", id).order("week_start", { ascending: false }).limit(12),
+    db().from("stagity_vendors").select("id, name").order("name"),
   ]);
 
   return (
@@ -27,7 +28,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
         <p className="muted">{p.email}{p.last_login_at ? ` · last signed in ${new Date(p.last_login_at).toLocaleDateString("en-US")}` : " · hasn't signed in yet"}</p>
       </div>
 
-      <EditPersonForm p={p} />
+      <EditPersonForm p={p} vendors={vendors ?? []} />
 
       <div className="form-card">
         <h2 className="i9-h3">Portal login</h2>

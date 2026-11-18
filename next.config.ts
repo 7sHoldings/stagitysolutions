@@ -26,8 +26,11 @@ const oldToNew: Record<string, string> = {
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  // Ship the blank USCIS Form I-9 with the route that fills it.
-  outputFileTracingIncludes: { "/hr/cases/[id]/pdf": ["./lib/i9/assets/i-9.pdf"] },
+  // Ship files the HR portal reads at runtime (blank USCIS Form I-9, logo for invoice PDFs).
+  outputFileTracingIncludes: {
+    "/hr/cases/[id]/pdf": ["./lib/i9/assets/i-9.pdf"],
+    "/hr/**/*": ["./public/logo.png"],
+  },
   images: {
     remotePatterns: [{ protocol: "https", hostname: "images.unsplash.com" }],
   },

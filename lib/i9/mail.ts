@@ -15,7 +15,20 @@ function transport() {
 }
 
 /** Returns false if email isn't configured or sending failed. */
-export async function send(to: string, subject: string, paragraphs: string[], button?: { label: string; href: string }) {
+export type MailExtras = {
+  cc?: string[];
+  bcc?: string[];
+  attachments?: { filename: string; content: Buffer | Uint8Array; contentType?: string }[];
+  signature?: string;
+};
+
+export async function send(
+  to: string,
+  subject: string,
+  paragraphs: string[],
+  button?: { label: string; href: string },
+  extras: MailExtras = {},
+) {
   const tr = transport();
   if (!tr) {
     console.warn("I-9 mail skipped: SMTP_USER / SMTP_PASS not set.");
@@ -29,10 +42,19 @@ export async function send(to: string, subject: string, paragraphs: string[], bu
            <p style="margin:0 0 14px;color:#5b6577;font-size:13px">Or paste this link into your browser: ${esc(button.href)}</p>`
         : ""
     }
-    <p style="margin-top:22px;color:#5b6577;font-size:13px">Stagity Solutions HR</p></div>`;
+    <p style="margin-top:22px;color:#5b6577;font-size:13px">${esc(extras.signature ?? "Stagity Solutions HR")}</p></div>`;
   const text = paragraphs.join("\n\n") + (button ? `\n\n${button.label}: ${button.href}\n` : "");
   try {
-    await tr.t.sendMail({ from: `"Stagity Solutions HR" <${tr.user}>`, to, subject, text, html });
+    await tr.t.sendMail({
+      from: `"${extras.signature ?? "Stagity Solutions HR"}" <${tr.user}>`,
+      to,
+      cc: extras.cc?.length ? extras.cc : undefined,
+      bcc: extras.bcc?.length ? extras.bcc : undefined,
+      subject,
+      text,
+      html,
+      attachments: extras.attachments?.map((a) => ({ filename: a.filename, content: Buffer.from(a.content), contentType: a.contentType })),
+    });
     return true;
   } catch (e) {
     console.error("I-9 mail failed:", e);
