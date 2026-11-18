@@ -111,7 +111,7 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
     ["Invoice date", mdY(d.issueDate)],
     ["Service period", d.periodLabel],
     ["Consultant", d.consultant],
-    [d.poNumber ? "PO / reference" : "Client", d.poNumber || d.client || "—"],
+    ...(d.poNumber ? ([["PO / reference", d.poNumber]] as [string, string][]) : []),
   ];
   const colW = W / 4;
   page.drawRectangle({ x: L, y: y - 40, width: W, height: 52, color: panel });
@@ -132,7 +132,7 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
   right(page, "AMOUNT", c.amount, y, bold, 8.5, white);
   y -= 36;
   page.drawText("Consulting services", { x: c.desc, y, size: 11, font: bold, color: ink });
-  page.drawText(wrap(`${d.consultant}${d.client ? ` at ${d.client}` : ""}`, font, 9.5, 300)[0], { x: c.desc, y: y - 15, size: 9.5, font, color: body });
+  page.drawText(wrap(d.consultant, font, 9.5, 300)[0], { x: c.desc, y: y - 15, size: 9.5, font, color: body });
   page.drawText(`Service dates: ${mdY(d.periodStart)} – ${mdY(d.periodEnd)}`, { x: c.desc, y: y - 29, size: 9, font, color: muted });
   right(page, d.hours.toFixed(2), c.hours, y, font, 11, body);
   right(page, usd(d.billRate), c.rate, y, font, 11, body);
@@ -169,6 +169,20 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
     y -= 24;
     label("Notes", L, y);
     wrap(d.notes, font, 9.5, W).slice(0, 3).forEach((t, i) => page.drawText(t, { x: L, y: y - 16 - i * 13.5, size: 9.5, font, color: body }));
+  }
+
+  // Questions
+  const ask: [string, PDFFont][] = [
+    ["If you have any questions, please reach out to ", font],
+    [company.accountsEmail, bold],
+    [" or ", font],
+    [company.phone, bold],
+    [".", font],
+  ];
+  let askX = (612 - ask.reduce((a, [t, f]) => a + f.widthOfTextAtSize(t, 10), 0)) / 2;
+  for (const [t, f] of ask) {
+    page.drawText(t, { x: askX, y: 86, size: 10, font: f, color: f === bold ? ink : body });
+    askX += f.widthOfTextAtSize(t, 10);
   }
 
   // Footer

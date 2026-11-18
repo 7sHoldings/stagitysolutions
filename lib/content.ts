@@ -5,6 +5,8 @@ export const company = {
   phone: "+1 (469) 547-1010",
   phoneHref: "tel:+14695471010",
   email: "hr@stagitysolutions.com",
+  /** Shown on vendor invoices for billing questions. */
+  accountsEmail: "hr@stagitysolutions.com",
   addressLine1: "4101 McEwen Rd, Suite 517",
   addressLine2: "Dallas, TX 75244",
   url: "https://stagitysolutions.com",
