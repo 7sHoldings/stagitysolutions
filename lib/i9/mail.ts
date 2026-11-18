@@ -112,18 +112,20 @@ export function sendPasswordResetCode(to: string, firstName: string, code: strin
 }
 
 /** Daily nudge until the person signs in and sets their own password. */
-export function sendSignupReminder(to: string, firstName: string, link: string, due: string, tempValid: boolean) {
+export function sendSignupReminder(to: string, firstName: string, link: string, due: string, tempValid: boolean, passwordDone = false) {
   const dueText = new Date(`${due}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" });
   return send(
     to,
     "Reminder: please set up your Stagity Solutions portal account",
     [
       `Hi ${firstName},`,
-      `You haven't set up your Stagity Solutions employee portal account yet. Please do it by ${dueText}. It takes 2 minutes.`,
-      tempValid
+      passwordDone
+        ? `You've set your password, but haven't finished setting up your Stagity Solutions portal account. Please sign in and add your phone number, home address and emergency contact by ${dueText}.`
+        : `You haven't set up your Stagity Solutions employee portal account yet. Please do it by ${dueText}. It takes 2 minutes: choose your password, then add your phone number, home address and emergency contact.`,
+      ...(passwordDone ? [] : [tempValid
         ? `Sign in with your email (${to}) and the temporary password from the email titled "Your Stagity Solutions portal account", then choose your own password.`
-        : `Your temporary password has expired. On the sign-in page, click "Forgot your password?" and we'll email you a code to set your password.`,
-      ...(tempValid ? ['Can\'t find that email? On the sign-in page, click "Forgot your password?" and we\'ll email you a code instead.'] : []),
+        : `Your temporary password has expired. On the sign-in page, click "Forgot your password?" and we'll email you a code to set your password.`]),
+      ...(tempValid && !passwordDone ? ['Can\'t find that email? On the sign-in page, click "Forgot your password?" and we\'ll email you a code instead.'] : []),
       `You'll use the portal to submit your weekly timesheets. Questions? Reply to this email or call ${company.phone}.`,
     ],
     { label: "Set up my account", href: link },

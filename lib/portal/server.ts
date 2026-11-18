@@ -24,6 +24,15 @@ export type Person = {
   start_date: string | null;
   end_date: string | null;
   adp_employee_id: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  emergency_name: string | null;
+  emergency_relationship: string | null;
+  emergency_phone: string | null;
+  profile_completed_at: string | null;
 };
 
 export async function hashPassword(pw: string): Promise<string> {
@@ -95,11 +104,15 @@ export async function portalPerson(): Promise<Person | null> {
   return data as Person;
 }
 
-/** For portal pages: signed-in person who has already set their own password. */
-export async function requirePerson(): Promise<Person> {
+/**
+ * For portal pages: signed-in person who has set their own password and filled in their
+ * contact details (phone, home address, emergency contact). `allowIncomplete` is for the details page itself.
+ */
+export async function requirePerson(opts: { allowIncomplete?: boolean } = {}): Promise<Person> {
   const p = await portalPerson();
   if (!p) redirect("/portal/login");
   if (p.must_change_password) redirect("/portal/set-password");
+  if (!p.profile_completed_at && !opts.allowIncomplete) redirect("/portal/details");
   return p;
 }
 export const TS_BUCKET = "timesheets";

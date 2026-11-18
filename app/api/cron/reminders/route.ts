@@ -179,9 +179,9 @@ export async function GET(req: Request) {
   {
     const { data: invited } = await db()
       .from("stagity_people")
-      .select("id, first_name, email, signup_due, temp_password_expires_at")
+      .select("id, first_name, email, signup_due, temp_password_expires_at, must_change_password")
       .eq("active", true)
-      .eq("must_change_password", true)
+      .or("must_change_password.eq.true,profile_completed_at.is.null")
       .not("email", "is", null)
       .gte("signup_due", today)
       .lt("created_at", `${today}T06:00:00Z`); // not on the day they were registered (they just got the welcome email)
@@ -189,7 +189,7 @@ export async function GET(req: Request) {
       if (needs.has(p.id)) continue; // already got a timesheet reminder today (max one email a day)
       if (!(await once(p.id, "signup-reminder", today))) continue;
       const tempValid = !!p.temp_password_expires_at && new Date(p.temp_password_expires_at) > new Date();
-      await sendSignupReminder(p.email!, p.first_name, `${portal}/login`, p.signup_due!, tempValid);
+      await sendSignupReminder(p.email!, p.first_name, `${portal}/login`, p.signup_due!, tempValid, !p.must_change_password);
       log.push(`signup-reminder:${p.email}`);
     }
   }

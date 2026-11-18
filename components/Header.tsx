@@ -10,6 +10,7 @@ import { signOutPortal } from "@/app/portal/actions";
 const employeeLinks = [
   { href: "/portal", label: "Timesheets" },
   { href: "/portal/i9", label: "Form I-9" },
+  { href: "/portal/details", label: "My details" },
   { href: "/portal/help", label: "Help" },
   { href: "/portal/set-password", label: "Change password" },
 ];

@@ -62,6 +62,21 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             </div>
           )}
 
+          {p.email && (
+            <div className="hr-panel">
+              <h2 className="i9-h3">Contact &amp; emergency</h2>
+              {p.profile_completed_at ? (
+                <dl className="i9-dl">
+                  <div className="i9-row"><dt>Phone</dt><dd><a href={`tel:${p.phone}`}>{p.phone}</a></dd></div>
+                  <div className="i9-row"><dt>Home address</dt><dd>{p.address_line1}{p.address_line2 ? `, ${p.address_line2}` : ""}<br />{p.city}, {p.state} {p.zip}</dd></div>
+                  <div className="i9-row"><dt>Emergency contact</dt><dd>{p.emergency_name} ({p.emergency_relationship})<br /><a href={`tel:${p.emergency_phone}`}>{p.emergency_phone}</a></dd></div>
+                </dl>
+              ) : (
+                <p className="muted i9-small">They&apos;ll add their phone, home address and emergency contact when they first sign in.</p>
+              )}
+            </div>
+          )}
+
           {!p.vendor_id && (
             <div className="hr-panel">
               <h2 className="i9-h3">Pay (payroll)</h2>
@@ -74,10 +89,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             <h2 className="i9-h3">Portal login</h2>
             {!p.email ? (
               <p className="muted i9-small">Payroll only. Add an email under Personal details to give them a login.</p>
-            ) : p.must_change_password ? (
+            ) : p.must_change_password || !p.profile_completed_at ? (
               <>
                 <p className="ack-warn">
-                  <strong>Not signed up yet.</strong>{" "}
+                  <strong>{p.must_change_password ? "Not signed up yet." : "Password set, but contact details not added yet."}</strong>{" "}
                   {p.signup_due && p.signup_due >= todayCT()
                     ? `A reminder email goes out every morning until ${p.signup_due}${reminders ? ` (${reminders} sent so far)` : ""}.`
                     : "No more automatic reminders (the date has passed or isn't set)."}

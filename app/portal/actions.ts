@@ -54,7 +54,7 @@ export async function setPassword(_prev: FormState, formData: FormData): Promise
     .eq("id", p.id);
   await startPortalSession({ id: p.id, session_version: version });
   await audit(null, `person:${p.id}`, "password_set");
-  redirect("/portal");
+  redirect(p.profile_completed_at ? "/portal" : "/portal/details");
 }
 
 export async function signOutPortal() {
@@ -133,4 +133,37 @@ export async function completePasswordReset(_prev: ResetState, formData: FormDat
   await startPortalSession({ id: p.id, session_version: version });
   await audit(null, `person:${p.id}`, "password_reset_completed");
   redirect("/portal");
+}
+
+// ---------- Contact details (required once after first sign-in) ----------
+
+const digits = (v: string) => v.replace(/\D/g, "");
+
+export async function saveDetails(_prev: FormState, formData: FormData): Promise<FormState> {
+  const p = await portalPerson();
+  if (!p) redirect("/portal/login");
+  const get = (k: string, max = 120) => String(formData.get(k) ?? "").trim().replace(/\s+/g, " ").slice(0, max);
+  const row = {
+    phone: get("phone", 30),
+    address_line1: get("address1", 160),
+    address_line2: get("address2", 160) || null,
+    city: get("city", 80),
+    state: get("state", 2).toUpperCase(),
+    zip: get("zip", 10),
+    emergency_name: get("emergencyName", 120),
+    emergency_relationship: get("emergencyRelationship", 60),
+    emergency_phone: get("emergencyPhone", 30),
+  };
+  if (digits(row.phone).length < 10 || digits(row.phone).length > 15) return { error: "Enter your phone number with area code." };
+  if (!row.address_line1 || !row.city) return { error: "Enter your home address and city." };
+  if (!/^[A-Z]{2}$/.test(row.state)) return { error: "Choose your state." };
+  if (!/^\d{5}(-\d{4})?$/.test(row.zip)) return { error: "Enter a 5-digit ZIP code." };
+  if (!row.emergency_name || !row.emergency_relationship) return { error: "Enter your emergency contact's name and relationship." };
+  if (digits(row.emergency_phone).length < 10 || digits(row.emergency_phone).length > 15) return { error: "Enter your emergency contact's phone number with area code." };
+  if (digits(row.emergency_phone) === digits(row.phone)) return { error: "Your emergency contact needs a different phone number from yours." };
+  const first = !p.profile_completed_at;
+  await db().from("stagity_people").update({ ...row, profile_completed_at: p.profile_completed_at ?? new Date().toISOString() }).eq("id", p.id);
+  await audit(null, `person:${p.id}`, first ? "profile_completed" : "profile_updated");
+  if (first) redirect("/portal?welcome=1");
+  return { message: "Saved." };
 }

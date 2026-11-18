@@ -8,9 +8,9 @@ const rangeLabel = (x: Period) => (x.start === x.end ? `${dayName(x.start)} ${sh
 const tsLabel: Record<string, string> = { draft: "Draft", submitted: "Waiting for HR", approved: "Approved", rejected: "Not approved" };
 const tsClass: Record<string, string> = { draft: "s-invited", submitted: "s-everify_submitted", approved: "s-closed", rejected: "s-section1_complete" };
 
-export default async function PortalHome({ searchParams }: { searchParams: Promise<{ submitted?: string }> }) {
+export default async function PortalHome({ searchParams }: { searchParams: Promise<{ submitted?: string; welcome?: string }> }) {
   const p = await requirePerson();
-  const submitted = (await searchParams).submitted;
+  const { submitted, welcome } = await searchParams;
   const today = todayCT();
   const { data: i9 } = await db()
     .from("stagity_i9_cases")
@@ -46,6 +46,11 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       <div>
         <h1 className="h2">Hi, {p.first_name}</h1>
       </div>
+      {welcome && (
+        <p className="form-status ok" role="status">
+          ✓ You&apos;re all set up. {p.kind === "consultant" ? "Submit your timesheets below, starting with November." : ""} Click <Link href="/portal/help">Help</Link> any time for the step-by-step guide.
+        </p>
+      )}
       {submitted && /^\d{4}-\d{2}-\d{2}$/.test(submitted) && (
         <p className="form-status ok" role="status">
           ✓ Your timesheet for {rangeLabel(periodFor(submitted))} was submitted. HR will review it and you&apos;ll get an email when it&apos;s approved.
