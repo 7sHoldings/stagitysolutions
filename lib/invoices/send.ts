@@ -2,7 +2,7 @@ import "server-only";
 import { audit, db, hrEmails } from "@/lib/i9/server";
 import { send } from "@/lib/i9/mail";
 import { TS_BUCKET } from "@/lib/portal/server";
-import { addDays, money, todayCT } from "@/lib/portal/dates";
+import { addDays, money, monthLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import { company } from "@/lib/content";
 import { buildInvoicePdf, type InvoicePdfData } from "./pdf";
 import { getSetting, recomputeDraft, type Invoice, type Vendor } from "./server";
@@ -24,10 +24,12 @@ export async function pdfData({ inv, vendor, person }: Loaded): Promise<InvoiceP
   const today = todayCT();
   const issue = inv.issue_date ?? today;
   return {
-    number: inv.number.startsWith("DRAFT-") ? "(assigned when sent)" : inv.number,
+    number: inv.number.startsWith("DRAFT-") ? "Assigned on send" : inv.number,
     issueDate: issue,
     dueDate: inv.due_date ?? addDays(issue, vendor.payment_terms_days),
     termsDays: vendor.payment_terms_days,
+    periodLabel: periodLabel(inv.period_start, inv.period_end),
+    amountPaid: inv.status === "paid" ? Number(inv.total) : 0,
     vendor: { name: vendor.name, address: vendor.address, apEmail: vendor.ap_email },
     consultant: `${person.first_name} ${person.last_name}`,
     client: person.client_name,
@@ -45,6 +47,24 @@ export async function pdfData({ inv, vendor, person }: Loaded): Promise<InvoiceP
   };
 }
 
+/** "September 2026" for a whole month, otherwise "Sep 7 – Sep 13, 2026". */
+export function periodLabel(start: string, end: string) {
+  const fullMonth = start.endsWith("-01") && addDays(end, 1).endsWith("-01") && start.slice(0, 7) === end.slice(0, 7);
+  return fullMonth ? monthLabel(start) : `${shortDate(start)} – ${shortDate(end)}, ${end.slice(0, 4)}`;
+}
+
+/**
+ * Next invoice number in Stagity's format: year + month of the service period + running number,
+ * e.g. 20260901, 20260902 for September 2026.
+ */
+async function nextInvoiceNumber(periodStart: string): Promise<string> {
+  const prefix = periodStart.slice(0, 4) + periodStart.slice(5, 7);
+  const { data } = await db().from("stagity_invoices").select("number").like("number", `${prefix}%`);
+  const used = (data ?? []).map((r) => Number(r.number.slice(prefix.length))).filter(Number.isFinite);
+  const next = (used.length ? Math.max(...used) : 0) + 1;
+  return prefix + String(next).padStart(2, "0");
+}
+
 /** Approves a draft: assigns the invoice number, builds the PDF and emails it to the vendor. */
 export async function approveAndSend(id: string, hr: string): Promise<{ error?: string; message?: string }> {
   await recomputeDraft(id); // pick up any rate change before sending
@@ -55,11 +75,13 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   if (!vendor.active) return { error: `${vendor.name} is marked inactive.` };
   if (Number(inv.total) <= 0) return { error: "The invoice total is $0. Check the consultant's bill rate." };
 
-  const { data: number, error: numErr } = await db().rpc("stagity_next_invoice_number");
-  if (numErr || !number) return { error: "Couldn't assign an invoice number." };
+  const number = await nextInvoiceNumber(inv.period_start);
+  // Reserve the number now (unique), so two sends can't take the same one.
+  const { error: reserveErr } = await db().from("stagity_invoices").update({ number }).eq("id", id).eq("status", "draft");
+  if (reserveErr) return { error: "Couldn't assign an invoice number. Please try again." };
   const issue = todayCT();
   const due = addDays(issue, vendor.payment_terms_days);
-  const ready: Loaded = { ...loaded, inv: { ...inv, number: number as string, issue_date: issue, due_date: due, status: "sent" } };
+  const ready: Loaded = { ...loaded, inv: { ...inv, number, issue_date: issue, due_date: due, status: "sent" } };
   const pdf = await buildInvoicePdf({ ...(await pdfData(ready)), draft: false });
 
   const attachments: { filename: string; content: Uint8Array; contentType?: string }[] = [
@@ -98,7 +120,10 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
     undefined,
     { cc, bcc: hrEmails(), attachments, signature: `${company.name} Accounts` },
   );
-  if (!ok) return { error: "The email couldn't be sent, so the invoice is still a draft. Check the email settings and try again." };
+  if (!ok) {
+    await db().from("stagity_invoices").update({ number: inv.number }).eq("id", id).eq("status", "draft");
+    return { error: "The email couldn't be sent, so the invoice is still a draft. Check the email settings and try again." };
+  }
 
   await db()
     .from("stagity_invoices")

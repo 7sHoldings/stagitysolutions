@@ -3,13 +3,17 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { company } from "@/lib/content";
-import { money } from "@/lib/portal/dates";
+
+// Layout follows Stagity's existing invoice: logo top right, company address, INVOICE, bill-to block,
+// Invoice# / Invoice Date / Invoice Period / Employee Name, an Item–Description–Unit Price–Quantity–Amount table,
+// and a Subtotal / Total / Amount Paid / Balance Due box.
 
 export type InvoicePdfData = {
   number: string;
   issueDate: string; // yyyy-mm-dd
   dueDate: string;
   termsDays: number;
+  periodLabel: string; // e.g. "September 2026"
   vendor: { name: string; address: string | null; apEmail: string };
   consultant: string;
   client: string | null;
@@ -21,17 +25,19 @@ export type InvoicePdfData = {
   billRate: number;
   billOtRate: number;
   total: number;
+  amountPaid?: number;
   paymentInstructions: string;
   notes: string | null;
   draft?: boolean;
 };
 
-const ink = rgb(0.043, 0.071, 0.125);
-const muted = rgb(0.36, 0.4, 0.47);
-const accent = rgb(0.07, 0.35, 0.84);
-const line = rgb(0.85, 0.87, 0.9);
+const ink = rgb(0.08, 0.08, 0.1);
+const grey = rgb(0.45, 0.47, 0.5);
+const border = rgb(0.35, 0.35, 0.38);
+const shade = rgb(0.91, 0.91, 0.92);
 
-const usDate = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const mdY = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(0, 4)}`;
+const amt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
   const out: string[] = [];
@@ -58,104 +64,122 @@ export async function buildInvoicePdf(d: InvoicePdfData): Promise<Uint8Array> {
   doc.setTitle(`Invoice ${d.number}`);
   doc.setAuthor(company.legalName);
   const page = doc.addPage([612, 792]);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-  const L = 48;
-  const R = 564;
+  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  const sansBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const serifBold = await doc.embedFont(StandardFonts.TimesRomanBold);
+  const L = 54;
+  const R = 558;
 
+  // Logo, top right
   try {
     const logo = await doc.embedPng(await readFile(path.join(process.cwd(), "public/logo.png")));
-    const w = 170;
-    page.drawImage(logo, { x: L - 6, y: 792 - 48 - (logo.height * w) / logo.width, width: w, height: (logo.height * w) / logo.width });
+    const w = 190;
+    const h = (logo.height * w) / logo.width;
+    page.drawImage(logo, { x: R - w, y: 752 - h, width: w, height: h });
   } catch {
-    page.drawText(company.legalName, { x: L, y: 730, size: 18, font: bold, color: ink });
+    right(page, company.legalName, R, 720, sansBold, 16);
   }
 
-  right(page, d.draft ? "DRAFT INVOICE" : "INVOICE", R, 740, bold, 24, d.draft ? muted : ink);
+  // Company address, left
+  [company.legalName, company.addressLine1 + ",", company.addressLine2].forEach((t, i) =>
+    page.drawText(t, { x: L, y: 640 - i * 12, size: 10.5, font: serifBold, color: ink }),
+  );
+
+  // INVOICE title, right (letter-spaced)
+  const title = d.draft ? "DRAFT  INVOICE" : "INVOICE";
+  const spacing = 3;
+  const titleWidth = [...title].reduce((a, ch) => a + sansBold.widthOfTextAtSize(ch, 17) + spacing, -spacing);
+  let tx = R - titleWidth;
+  for (const ch of title) {
+    page.drawText(ch, { x: tx, y: 590, size: 17, font: sansBold, color: d.draft ? grey : ink });
+    tx += sansBold.widthOfTextAtSize(ch, 17) + spacing;
+  }
+
+  // Bill to, left
+  const billTo = [d.vendor.name + ",", ...(d.vendor.address ? d.vendor.address.split(/\r?\n/).filter(Boolean) : [])];
+  billTo.flatMap((t) => wrap(t, serifBold, 10.5, 250)).slice(0, 6).forEach((t, i) =>
+    page.drawText(t, { x: L, y: 545 - i * 13, size: 10.5, font: serifBold, color: ink }),
+  );
+
+  // Invoice details, right
   const meta: [string, string][] = [
-    ["Invoice #", d.number],
-    ["Invoice date", usDate(d.issueDate)],
-    ["Due date", usDate(d.dueDate)],
-    ["Terms", d.termsDays === 0 ? "Due on receipt" : `Net ${d.termsDays}`],
+    ["Invoice#", d.number],
+    ["Invoice Date", mdY(d.issueDate)],
+    ["Due Date", mdY(d.dueDate)],
+    ["Invoice Period", d.periodLabel],
+    ["Employee Name", d.consultant],
   ];
+  if (d.poNumber) meta.push(["PO / Reference", d.poNumber]);
   meta.forEach(([k, v], i) => {
-    const y = 712 - i * 16;
-    right(page, k, R - 120, y, font, 10, muted);
-    right(page, v, R, y, bold, 10);
+    const y = 548 - i * 22;
+    page.drawText(k, { x: 380, y, size: 9, font: sansBold, color: ink });
+    page.drawText(v, { x: 472, y, size: 9, font: sans, color: ink });
   });
 
-  // From / Bill to
-  let y = 630;
-  page.drawText("FROM", { x: L, y, size: 9, font: bold, color: accent });
-  page.drawText("BILL TO", { x: 320, y, size: 9, font: bold, color: accent });
-  const from = [company.legalName, company.addressLine1, company.addressLine2, company.phone, company.email];
-  const to = [d.vendor.name, ...(d.vendor.address ? d.vendor.address.split(/\r?\n/).filter(Boolean) : []), d.vendor.apEmail];
-  from.forEach((t, i) => page.drawText(t, { x: L, y: y - 16 - i * 14, size: 10, font: i === 0 ? bold : font, color: ink }));
-  to.flatMap((t) => wrap(t, font, 10, 240)).forEach((t, i) => page.drawText(t, { x: 320, y: y - 16 - i * 14, size: 10, font: i === 0 ? bold : font, color: ink }));
+  // Line-item table
+  const top = 400;
+  const tableBottom = 255;
+  const cols = { item: L + 10, desc: L + 92, price: 420, qty: 490, amount: R - 8 };
+  page.drawRectangle({ x: L, y: top - 28, width: R - L, height: 28, color: shade, borderColor: border, borderWidth: 1 });
+  page.drawText("Item", { x: cols.item, y: top - 18, size: 10.5, font: sansBold, color: ink });
+  page.drawText("Description", { x: cols.desc, y: top - 18, size: 10.5, font: sansBold, color: ink });
+  right(page, "Unit Price", cols.price, top - 18, sansBold, 10.5);
+  right(page, "Quantity", cols.qty + 6, top - 18, sansBold, 10.5);
+  right(page, "Amount", cols.amount, top - 18, sansBold, 10.5);
+  page.drawRectangle({ x: L, y: tableBottom, width: R - L, height: top - 28 - tableBottom, borderColor: border, borderWidth: 1 });
 
-  // Assignment details
-  y = 520;
-  page.drawRectangle({ x: L, y: y - 46, width: R - L, height: 58, color: rgb(0.96, 0.965, 0.973) });
-  const details: [string, string][] = [
-    ["Consultant", d.consultant],
-    ["Client", d.client ?? "—"],
-    ["Service period", `${usDate(d.periodStart)} – ${usDate(d.periodEnd)}`],
-    ["PO / reference", d.poNumber || "—"],
+  const rows: [string, string, number, number][] = [
+    ["Hours", d.client ? `Consulting services at ${d.client}` : "Consulting services", d.billRate, d.regularHours],
   ];
-  details.forEach(([k, v], i) => {
-    const x = L + 12 + i * 129;
-    page.drawText(k, { x, y: y - 8, size: 8.5, font, color: muted });
-    wrap(v, bold, 10, 120).slice(0, 2).forEach((t, j) => page.drawText(t, { x, y: y - 24 - j * 12, size: 10, font: bold, color: ink }));
-  });
-
-  // Line items
-  y = 440;
-  const cols = { desc: L, hours: 380, rate: 470, amount: R };
-  page.drawText("DESCRIPTION", { x: cols.desc, y, size: 9, font: bold, color: muted });
-  right(page, "HOURS", cols.hours, y, bold, 9, muted);
-  right(page, "RATE", cols.rate, y, bold, 9, muted);
-  right(page, "AMOUNT", cols.amount, y, bold, 9, muted);
-  page.drawLine({ start: { x: L, y: y - 8 }, end: { x: R, y: y - 8 }, thickness: 1, color: line });
-  const rows: [string, number, number][] = [[`Professional services: ${d.consultant} (regular hours)`, d.regularHours, d.billRate]];
-  if (d.overtimeHours > 0) rows.push([`Professional services: ${d.consultant} (overtime hours)`, d.overtimeHours, d.billOtRate]);
-  y -= 28;
-  for (const [desc, hours, rate] of rows) {
-    page.drawText(desc, { x: cols.desc, y, size: 10, font, color: ink });
-    right(page, hours.toFixed(2), cols.hours, y, font, 10);
-    right(page, money(rate), cols.rate, y, font, 10);
-    right(page, money(Math.round(hours * rate * 100) / 100), cols.amount, y, font, 10);
-    page.drawLine({ start: { x: L, y: y - 10 }, end: { x: R, y: y - 10 }, thickness: 0.5, color: line });
-    y -= 26;
+  if (d.overtimeHours > 0) rows.push(["OT Hours", "Overtime hours", d.billOtRate, d.overtimeHours]);
+  let y = top - 56;
+  for (const [item, desc, price, qty] of rows) {
+    page.drawText(item, { x: cols.item, y, size: 11, font: sansBold, color: ink });
+    page.drawText(wrap(desc, sans, 9.5, 220)[0], { x: cols.desc, y, size: 9.5, font: sans, color: ink });
+    right(page, `$${amt(price)}`, cols.price, y, sans, 9.5);
+    right(page, amt(qty), cols.qty, y, sans, 9.5);
+    right(page, amt(Math.round(price * qty * 100) / 100), cols.amount, y, sans, 9.5);
+    page.drawLine({ start: { x: L, y: y - 6 }, end: { x: R, y: y - 6 }, thickness: 0.75, color: border });
+    y -= 30;
   }
-  y -= 6;
-  right(page, "Total hours", cols.rate, y, font, 10, muted);
-  right(page, (d.regularHours + d.overtimeHours).toFixed(2), cols.amount, y, font, 10);
-  y -= 26;
-  page.drawRectangle({ x: 360, y: y - 10, width: R - 360, height: 30, color: ink });
-  page.drawText("TOTAL DUE", { x: 372, y: y + 0.5, size: 11, font: bold, color: rgb(1, 1, 1) });
-  right(page, money(d.total), R - 12, y + 0.5, bold, 13, rgb(1, 1, 1));
 
-  // Payment instructions & notes
-  y -= 56;
-  if (d.paymentInstructions) {
-    page.drawText("PAYMENT INSTRUCTIONS", { x: L, y, size: 9, font: bold, color: accent });
-    y -= 15;
-    for (const t of wrap(d.paymentInstructions, font, 10, R - L).slice(0, 8)) {
-      page.drawText(t, { x: L, y, size: 10, font, color: ink });
-      y -= 14;
-    }
-    y -= 10;
+  // Totals box (right) and payment instructions (left)
+  const boxTop = tableBottom - 6;
+  const boxH = 140;
+  const split = 370;
+  page.drawRectangle({ x: L, y: boxTop - boxH, width: R - L, height: boxH, borderColor: border, borderWidth: 1 });
+  page.drawLine({ start: { x: split, y: boxTop }, end: { x: split, y: boxTop - boxH }, thickness: 1, color: border });
+  const paid = d.amountPaid ?? 0;
+  const totals: [string, number][] = [["Subtotal", d.total], ["Total", d.total], ["Amount Paid", paid]];
+  totals.forEach(([k, v], i) => {
+    const ty = boxTop - 22 - i * 26;
+    page.drawText(k, { x: split + 16, y: ty, size: 10.5, font: sansBold, color: ink });
+    right(page, amt(v), cols.amount, ty, sans, 10);
+    if (i === 0) page.drawLine({ start: { x: split, y: ty - 9 }, end: { x: R, y: ty - 9 }, thickness: 0.75, color: border });
+  });
+  page.drawRectangle({ x: split, y: boxTop - boxH, width: R - split, height: 32, color: shade, borderColor: border, borderWidth: 1 });
+  page.drawText("Balance Due", { x: split + 16, y: boxTop - boxH + 11, size: 11, font: sansBold, color: ink });
+  right(page, `$${amt(d.total - paid)}`, cols.amount, boxTop - boxH + 11, sansBold, 11);
+
+  let py = boxTop - 18;
+  const leftW = split - L - 24;
+  const terms = d.termsDays === 0 ? "Payment due on receipt." : `Payment terms: Net ${d.termsDays}.`;
+  page.drawText(terms, { x: L + 12, y: py, size: 9, font: sansBold, color: ink });
+  py -= 14;
+  for (const t of wrap(d.paymentInstructions, sans, 8.5, leftW).slice(0, 6)) {
+    page.drawText(t, { x: L + 12, y: py, size: 8.5, font: sans, color: ink });
+    py -= 11.5;
   }
   if (d.notes) {
-    page.drawText("NOTES", { x: L, y, size: 9, font: bold, color: accent });
-    y -= 15;
-    for (const t of wrap(d.notes, font, 10, R - L).slice(0, 6)) {
-      page.drawText(t, { x: L, y, size: 10, font, color: ink });
-      y -= 14;
+    py -= 4;
+    for (const t of wrap(d.notes, sans, 8.5, leftW).slice(0, 3)) {
+      page.drawText(t, { x: L + 12, y: py, size: 8.5, font: sans, color: grey });
+      py -= 11.5;
     }
   }
 
-  page.drawLine({ start: { x: L, y: 70 }, end: { x: R, y: 70 }, thickness: 0.5, color: line });
-  page.drawText(`Thank you for your business. Questions about this invoice: ${company.email} · ${company.phone}`, { x: L, y: 54, size: 9, font, color: muted });
+  // Footer
+  const footer = `${company.legalName} · ${company.phone} · ${company.email}`;
+  page.drawText(footer, { x: (612 - sans.widthOfTextAtSize(footer, 8.5)) / 2, y: 40, size: 8.5, font: sans, color: grey });
   return doc.save();
 }
