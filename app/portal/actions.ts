@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { audit, db } from "@/lib/i9/server";
+import { audit, db, newLoginCode, sha256 } from "@/lib/i9/server";
+import { sendPasswordResetCode } from "@/lib/i9/mail";
 import { checkPassword, endPortalSession, hashPassword, passwordProblem, portalPerson, startPortalSession } from "@/lib/portal/server";
 
 export type FormState = { error?: string; message?: string };
@@ -59,4 +60,77 @@ export async function setPassword(_prev: FormState, formData: FormData): Promise
 export async function signOutPortal() {
   await endPortalSession();
   redirect("/portal/login");
+}
+
+// ---------- Forgot password ----------
+
+export type ResetState = { step: "email" | "code"; email?: string; message?: string; error?: string };
+
+export async function requestPasswordReset(_prev: ResetState, formData: FormData): Promise<ResetState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase().slice(0, 200);
+  const generic: ResetState = { step: "code", email, message: "If that email has a portal account, we've sent it a 6-digit code. Check your inbox (and spam)." };
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { step: "email", error: "Enter the email you use to sign in." };
+
+  const { data: p } = await db().from("stagity_people").select("id, first_name, email, active").eq("email", email).maybeSingle();
+  if (!p || !p.active) return generic; // don't reveal which emails have accounts
+
+  const since = new Date(Date.now() - 3600_000).toISOString();
+  const { count } = await db().from("stagity_password_resets").select("id", { count: "exact", head: true }).eq("person_id", p.id).gte("created_at", since);
+  if ((count ?? 0) >= 5) return { step: "email", error: "Too many codes requested. Try again in an hour, or contact HR." };
+
+  const code = newLoginCode();
+  await db()
+    .from("stagity_password_resets")
+    .insert({ person_id: p.id, code_hash: sha256(`${p.id}:${code}`), expires_at: new Date(Date.now() + 15 * 60_000).toISOString() });
+  await sendPasswordResetCode(p.email, p.first_name, code);
+  await audit(null, `person:${p.id}`, "password_reset_requested");
+  return generic;
+}
+
+export async function completePasswordReset(_prev: ResetState, formData: FormData): Promise<ResetState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase().slice(0, 200);
+  const code = String(formData.get("code") ?? "").replace(/\D/g, "");
+  const pw = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  const fail: ResetState = { step: "code", email, error: "That code is incorrect or has expired. Request a new one." };
+
+  const problem = passwordProblem(pw);
+  if (problem) return { step: "code", email, error: problem };
+  if (pw !== confirm) return { step: "code", email, error: "The two passwords don't match." };
+  if (code.length !== 6) return fail;
+
+  const { data: p } = await db().from("stagity_people").select("id, active, session_version").eq("email", email).maybeSingle();
+  if (!p || !p.active) return fail;
+  const { data: row } = await db()
+    .from("stagity_password_resets")
+    .select("*")
+    .eq("person_id", p.id)
+    .is("used_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!row || row.attempts >= 5) return fail;
+  if (row.code_hash !== sha256(`${p.id}:${code}`)) {
+    await db().from("stagity_password_resets").update({ attempts: row.attempts + 1 }).eq("id", row.id);
+    return fail;
+  }
+
+  const version = p.session_version + 1; // signs out every other session
+  await db().from("stagity_password_resets").update({ used_at: new Date().toISOString() }).eq("id", row.id);
+  await db()
+    .from("stagity_people")
+    .update({
+      password_hash: await hashPassword(pw),
+      must_change_password: false,
+      temp_password_expires_at: null,
+      session_version: version,
+      failed_logins: 0,
+      locked_until: null,
+      last_login_at: new Date().toISOString(),
+    })
+    .eq("id", p.id);
+  await startPortalSession({ id: p.id, session_version: version });
+  await audit(null, `person:${p.id}`, "password_reset_completed");
+  redirect("/portal");
 }

@@ -96,6 +96,14 @@ export function sendLoginCode(to: string, code: string) {
   ]);
 }
 
+export function sendPasswordResetCode(to: string, firstName: string, code: string) {
+  return send(to, `Your Stagity portal password reset code: ${code}`, [
+    `Hi ${firstName},`,
+    `Your code to reset your portal password is ${code}.`,
+    "It expires in 15 minutes. If you didn't ask to reset your password, you can ignore this email; your password hasn't changed.",
+  ]);
+}
+
 export function sendWelcome(to: string, firstName: string, tempPassword: string, link: string, tasks: string[]) {
   return send(
     to,

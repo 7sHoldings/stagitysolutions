@@ -59,7 +59,8 @@ Private pages, not linked from the public site and blocked from search engines.
 
 **Accounts.** HR signs in at `/hr/login` with a 6-digit code emailed to an address in `HR_EMAILS`. HR registers each consultant or employee
 on **People** (name, email, phone, client, client manager, hourly rate, ADP employee ID). The system emails them the portal link and a temporary
-password (valid 7 days); on first sign-in they must choose their own password. HR can resend a temporary password or deactivate an account.
+password (valid 7 days); on first sign-in they must choose their own password. They can change it any time, or reset it themselves with
+**Forgot password?** on the sign-in page (a 6-digit code is emailed). HR can also send a new temporary password or deactivate an account.
 
 **Form I-9** (DHS alternative procedure for E-Verify employers). HR starts it when registering someone (or from their profile). The employee signs in,
 completes Section 1, uploads document photos and e-signs. HR reviews the copies, holds a live video call where the employee shows the same originals,
