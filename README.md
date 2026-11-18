@@ -61,7 +61,10 @@ that file and re-check the field names in `lib/i9/pdf.ts`.
 
 **Timesheets.** Consultants enter hours for every weekday (0 for holidays/days off; weekends optional) and upload the timesheet their client
 approved. Timesheets cover a Sun–Sat week **split at month end** (e.g. Sun Aug 30–Mon Aug 31 is one period, Tue Sep 1–Sat Sep 5 the next), so each month can be
-completed on its own. HR approves or sends back with a note. Overtime (over 40 h per Sun–Sat workweek, across a split) is calculated automatically.
+completed on its own. Uploading the client-approved timesheet (screenshot or PDF) is required, and notes for HR are optional.
+**Automatic check:** on submit, Claude (Opus 5.5, `lib/portal/verify.ts`) reads the upload and reports whether it shows approval, the name,
+the dates and the hours per day, compared with what was entered. If it can't confirm approval or the hours differ, the consultant must fix it or add
+a note and submit anyway; HR sees the result (✓ / ⚠) and can re-run it. Needs `ANTHROPIC_API_KEY`. HR approves or sends back with a note. Overtime (over 40 h per Sun–Sat workweek, across a split) is calculated automatically.
 
 | Rule | Value |
 | --- | --- |
@@ -85,5 +88,5 @@ Gmail account to the vendor with the PDF and the approved timesheets attached (H
 `stagity_hr_login_codes`; private storage buckets `i9-documents` and `timesheets`. RLS is on with no policies, so only the server (secret key)
 can access them. I-9 data (including SSN) is encrypted with AES-256-GCM before it's stored; passwords are hashed with scrypt.
 
-**Environment variables:** `SUPABASE_SECRET_KEY`, `I9_ENCRYPTION_KEY`, `I9_SESSION_SECRET`, `HR_EMAILS`, `CRON_SECRET` (plus the existing
+**Environment variables:** `SUPABASE_SECRET_KEY`, `I9_ENCRYPTION_KEY`, `I9_SESSION_SECRET`, `HR_EMAILS`, `CRON_SECRET`, `ANTHROPIC_API_KEY` (plus the existing
 `SUPABASE_URL` and `SMTP_*`). Back up `I9_ENCRYPTION_KEY` somewhere safe: without it, stored I-9 records can't be decrypted.

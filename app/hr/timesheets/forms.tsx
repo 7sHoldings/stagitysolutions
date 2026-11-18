@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { remindConsultant, reviewTimesheet } from "./actions";
+import { recheckTimesheet, remindConsultant, reviewTimesheet } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 
@@ -32,6 +32,19 @@ export function ReviewForm({ id, status }: { id: string; status: string }) {
         {status === "submitted" && <button className="btn btn-primary" name="decision" value="approve" disabled={pending}>Approve</button>}
         <button className="btn btn-outline" name="decision" value="reject" disabled={pending}>Send back</button>
       </div>
+    </form>
+  );
+}
+
+export function RecheckButton({ id }: { id: string }) {
+  const [s, action, pending] = useActionState(recheckTimesheet, {} as ActionState);
+  return (
+    <form action={action} className="i9-stack" style={{ gap: 6 }}>
+      <input type="hidden" name="id" value={id} />
+      <button className="btn btn-outline" disabled={pending} style={{ alignSelf: "flex-start", minHeight: 38, padding: "6px 16px", fontSize: 14 }}>
+        {pending ? "Checking…" : "Check again"}
+      </button>
+      <Status s={s} />
     </form>
   );
 }

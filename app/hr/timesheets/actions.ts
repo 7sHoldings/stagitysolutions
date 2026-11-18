@@ -7,6 +7,7 @@ import { deadlineFor, monthLabel, payDateFor, periodLabel, sheetLabel } from "@/
 import { missingPeriods, monthOverview } from "@/lib/portal/timesheets";
 import type { ActionState } from "../actions";
 import { releaseTimesheet, syncDraftInvoices } from "@/lib/invoices/server";
+import { verifyAndStore } from "@/lib/portal/verify";
 
 export async function reviewTimesheet(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
@@ -66,4 +67,13 @@ export async function remindConsultant(_prev: ActionState, formData: FormData): 
   );
   await audit(null, `hr:${hr}`, "timesheet_reminder_sent", { personId, month, weeks });
   return sent ? { ok: true, message: `Reminder sent to ${p.email}.` } : { error: "Email failed." };
+}
+
+export async function recheckTimesheet(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = String(formData.get("id") ?? "");
+  const r = await verifyAndStore(id);
+  await audit(null, `hr:${hr}`, "timesheet_rechecked", { timesheetId: id, verdict: r.verdict });
+  revalidatePath(`/hr/timesheets/${id}`);
+  return r.error && r.verdict === "unchecked" ? { error: r.error } : { ok: true, message: "Checked again." };
 }

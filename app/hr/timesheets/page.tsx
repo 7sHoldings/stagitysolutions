@@ -61,6 +61,7 @@ export default async function HrTimesheets({ searchParams }: { searchParams: Pro
                       <td key={x.start}>
                         <Link href={`/hr/timesheets/${s.id}`} className={`i9-dot ${s.status}`}>
                           {s.status === "rejected" ? "sent back" : s.status} · {Number(s.total_hours)}h{late ? " · late" : ""}
+                          {s.ai_status === "verified" ? " ✓" : s.ai_status && s.ai_status !== "unchecked" && s.status === "submitted" ? " ⚠" : ""}
                         </Link>
                       </td>
                     );
@@ -79,7 +80,7 @@ export default async function HrTimesheets({ searchParams }: { searchParams: Pro
         </table>
       </div>
       <p className="muted i9-small">
-        Weeks that cross into a new month are split, so each month can be completed on its own. Every weekday must be filled in (0 for
+        ✓ = the uploaded approved timesheet was verified automatically; ⚠ = the automatic check wants you to look closely. Weeks that cross into a new month are split, so each month can be completed on its own. Every weekday must be filled in (0 for
         holidays). When a consultant&apos;s month is complete (all periods approved), their vendor invoice is sent automatically, and the
         hours go on that month&apos;s payroll.
       </p>

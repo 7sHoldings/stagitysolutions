@@ -4,7 +4,8 @@ import { db, requireHr } from "@/lib/i9/server";
 import { TS_BUCKET } from "@/lib/portal/server";
 import { dayName, datesBetween, periodFor, sheetLabel, shortDate } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
-import { ReviewForm } from "../forms";
+import { RecheckButton, ReviewForm } from "../forms";
+import type { AiResult } from "@/lib/portal/verify";
 
 export default async function HrTimesheet({ params }: { params: Promise<{ id: string }> }) {
   const hr = await requireHr();
@@ -49,7 +50,9 @@ export default async function HrTimesheet({ params }: { params: Promise<{ id: st
           </tbody>
         </table>
       </div>
-      {s.notes && <p><strong>Consultant notes:</strong> {s.notes}</p>}
+      <AiPanel status={s.ai_status} result={s.ai_check as AiResult | null} checkedAt={s.ai_checked_at} id={id} />
+      {s.notes && <p className="form-status" style={{ background: "var(--surface)" }}><strong>Consultant&apos;s note:</strong> {s.notes}</p>}
+
       <div className="i9-card">
         <h2 className="i9-h3">Client-approved timesheet</h2>
         {files?.length ? (
@@ -74,5 +77,41 @@ export default async function HrTimesheet({ params }: { params: Promise<{ id: st
       {["submitted", "approved"].includes(s.status) && <ReviewForm id={id} status={s.status} />}
       {s.review_note && <p className="muted">HR note: {s.review_note}</p>}
     </section>
+  );
+}
+
+const aiLabel: Record<string, [string, string]> = {
+  verified: ["Approved timesheet verified", "approved"],
+  needs_review: ["Needs your review", "draft"],
+  not_approved: ["Not approved / not a timesheet", "late"],
+  unchecked: ["Not checked automatically", "draft"],
+};
+
+function AiPanel({ status, result, checkedAt, id }: { status: string | null; result: AiResult | null; checkedAt: string | null; id: string }) {
+  const [label, cls] = aiLabel[status ?? "unchecked"] ?? aiLabel.unchecked;
+  const c = result?.check;
+  return (
+    <div className="i9-card">
+      <div className="hero-row" style={{ alignItems: "center" }}>
+        <h2 className="i9-h3">Automatic check</h2>
+        <span className={`i9-dot ${cls}`} style={{ fontSize: 13.5, padding: "6px 12px" }}>{label}</span>
+      </div>
+      {result?.error && <p className="muted">{result.error}</p>}
+      {c && (
+        <dl className="i9-dl">
+          <div className="i9-row"><dt>What it shows</dt><dd>{c.summary}</dd></div>
+          <div className="i9-row"><dt>Approval</dt><dd>{c.approval_status}{c.approval_evidence ? `: "${c.approval_evidence}"` : ""}</dd></div>
+          <div className="i9-row"><dt>Name on document</dt><dd>{c.name_on_document || "not shown"} ({c.name_matches === "yes" ? "matches" : c.name_matches === "no" ? "does NOT match" : "not shown"})</dd></div>
+          <div className="i9-row"><dt>Dates on document</dt><dd>{c.dates_on_document || "not shown"} ({c.period_matches})</dd></div>
+          <div className="i9-row"><dt>Hours on document</dt><dd>{c.total_hours_shown ? `${c.total_hours_on_document} total` : c.hours_by_date.length ? `${c.hours_by_date.reduce((a, d) => a + d.hours, 0)} (sum of days read)` : "not readable"}</dd></div>
+          {!!result.mismatches.length && (
+            <div className="i9-row"><dt>Hours that differ</dt><dd style={{ color: "#b91c1c" }}>{result.mismatches.map((m) => `${m.date}: entered ${m.entered}, document ${m.document}`).join("; ")}</dd></div>
+          )}
+          {!!c.issues.length && <div className="i9-row"><dt>Notes</dt><dd>{c.issues.join(" ")}</dd></div>}
+        </dl>
+      )}
+      <p className="muted i9-small">{checkedAt ? `Checked ${new Date(checkedAt).toLocaleString("en-US", { timeZone: "America/Chicago" })} CT. ` : ""}This is an automatic reading. Always glance at the file before approving.</p>
+      <RecheckButton id={id} />
+    </div>
   );
 }
