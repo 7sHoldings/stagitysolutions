@@ -45,6 +45,9 @@ export default function Header() {
               {l.label}
             </Link>
           ))}
+          <Link href="/sign-in" className="btn btn-outline" aria-current={pathname === "/sign-in" ? "page" : undefined}>
+            Sign in
+          </Link>
           <Link href="/contact" className="btn btn-dark">
             Contact us
           </Link>

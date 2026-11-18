@@ -55,7 +55,7 @@ Every question typed in the chat is logged to `stagity_chat_questions`. Check ro
 
 ## HR portal (`/hr`) and employee portal (`/portal`)
 
-Private pages, not linked from the public site and blocked from search engines.
+Reached from the **Sign in** button in the site header (`/sign-in`: Employee sign in → `/portal/login`, Admin sign in → `/hr/login`). Blocked from search engines.
 
 **Accounts.** HR signs in at `/hr/login` with a 6-digit code emailed to an address in `HR_EMAILS`. HR registers each consultant or employee
 on **People** (name, email, phone, client, client manager, hourly rate, ADP employee ID). The system emails them the portal link and a temporary
