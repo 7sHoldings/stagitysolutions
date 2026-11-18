@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/i9/server";
 import { addDays, monthEnd, monthStart, weekStartOf, periodsInMonth, round2, splitOvertime, todayCT, type Period } from "./dates";
 
-export type SheetRow = { id: string; person_id: string; week_start: string; status: string; total_hours: number; submitted_at: string | null; ai_status: string | null };
+export type SheetRow = { id: string; person_id: string; week_start: string; status: string; total_hours: number; submitted_at: string | null };
 export type ConsultantRow = {
   id: string; first_name: string; last_name: string; email: string; client_name: string | null;
   start_date: string | null; end_date: string | null; active: boolean;
@@ -27,7 +27,7 @@ export async function monthOverview(month: string) {
       .order("last_name"),
     db()
       .from("stagity_timesheets")
-      .select("id, person_id, week_start, status, total_hours, submitted_at, ai_status")
+      .select("id, person_id, week_start, status, total_hours, submitted_at")
       .gte("week_start", m)
       .lte("week_start", monthEnd(m)),
   ]);

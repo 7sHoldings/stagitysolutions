@@ -6,7 +6,7 @@ import { audit, db } from "@/lib/i9/server";
 import { portalPerson } from "@/lib/portal/server";
 import { datesBetween, isPeriodStart, isWeekend, periodFor, round2, submitFrom, todayCT } from "@/lib/portal/dates";
 import { recomputeWeekOvertime } from "@/lib/portal/timesheets";
-import { explainForConsultant, verifyAndStore } from "@/lib/portal/verify";
+import { notifyTimesheetSubmitted } from "@/lib/portal/mail";
 
 import { TS_BUCKET } from "@/lib/portal/server";
 const MIME_EXT: Record<string, string> = {
@@ -38,8 +38,8 @@ async function editableSheet(personId: string, week: string) {
  * hours: one entry per date in the period; null = left blank.
  * To submit, every weekday the consultant was employed must be filled in (0 for holidays or days off).
  */
-export async function saveTimesheet(week: string, rawHours: (number | null)[], notes: string, submit: boolean, override = false): Promise<{
-  ok?: boolean; message?: string; error?: string; needsConfirm?: boolean; aiMessage?: string;
+export async function saveTimesheet(week: string, rawHours: (number | null)[], notes: string, submit: boolean): Promise<{
+  ok?: boolean; message?: string; error?: string;
 }> {
   const p = await me();
   if (!p) return { error: "Please sign in again." };
@@ -62,7 +62,6 @@ export async function saveTimesheet(week: string, rawHours: (number | null)[], n
     if (blank.length) return { error: "Fill in every weekday. Enter 0 for holidays or days you didn't work." };
     const { count } = await db().from("stagity_timesheet_files").select("id", { count: "exact", head: true }).eq("timesheet_id", sheet.id);
     if (!count) return { error: "Upload a screenshot or PDF of your approved timesheet from your client or vendor portal before submitting." };
-    if (override && !notes.trim()) return { error: "Add a note for HR explaining why you're submitting anyway." };
   }
 
   await db().from("stagity_timesheet_days").delete().eq("timesheet_id", sheet.id);
@@ -76,14 +75,6 @@ export async function saveTimesheet(week: string, rawHours: (number | null)[], n
   }
   await recomputeWeekOvertime(p.id, period.start);
 
-  // Check the uploaded approved timesheet automatically before it goes to HR.
-  if (submit) {
-    const ai = await verifyAndStore(sheet.id);
-    if (!override && (ai.verdict === "not_approved" || ai.verdict === "needs_review")) {
-      await db().from("stagity_timesheets").update({ total_hours: total, notes: notes.slice(0, 1000) || null, updated_at: new Date().toISOString() }).eq("id", sheet.id);
-      return { needsConfirm: true, aiMessage: explainForConsultant(ai) };
-    }
-  }
   await db()
     .from("stagity_timesheets")
     .update({
@@ -93,7 +84,10 @@ export async function saveTimesheet(week: string, rawHours: (number | null)[], n
       ...(submit ? { status: "submitted", submitted_at: new Date().toISOString(), review_note: null } : {}),
     })
     .eq("id", sheet.id);
-  if (submit) await audit(null, `person:${p.id}`, "timesheet_submitted", { period: week, total, override });
+  if (submit) {
+    await audit(null, `person:${p.id}`, "timesheet_submitted", { period: week, total });
+    await notifyTimesheetSubmitted(sheet.id);
+  }
   revalidatePath("/portal");
   return { ok: true, message: submit ? "Submitted. HR will review it." : "Saved as draft." };
 }

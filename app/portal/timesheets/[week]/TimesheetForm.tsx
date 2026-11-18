@@ -37,8 +37,6 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
   const [files, setFiles] = useState<F[]>(initialFiles);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok?: boolean; text: string } | null>(null);
-  const [ai, setAi] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState(false);
   const [pending, start] = useTransition();
   const total = hours.reduce((a, h) => a + (Number(h) || 0), 0);
 
@@ -57,7 +55,6 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
       const rec = await recordTimesheetFile(week, up.path!, mime, file.name);
       if ("error" in rec && rec.error) { setMsg({ text: rec.error }); continue; }
       setFiles((f) => [...f, { id: rec.id!, name: file.name }]);
-      setAi(null);
     }
     setBusy(false);
   }
@@ -68,18 +65,12 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
     else setFiles((f) => f.filter((x) => x.id !== id));
   }
 
-  function save(submit: boolean, override = false) {
+  function save(submit: boolean) {
     setMsg(null);
     start(async () => {
-      const r = await saveTimesheet(week, hours.map((h) => (h.trim() === "" ? null : Number(h))), notes, submit, override);
-      if (r.needsConfirm) {
-        setAi(r.aiMessage ?? "We couldn't confirm your timesheet is approved.");
-        setConfirm(false);
-        return;
-      }
+      const r = await saveTimesheet(week, hours.map((h) => (h.trim() === "" ? null : Number(h))), notes, submit);
       if (r.error) setMsg({ text: r.error });
       else {
-        setAi(null);
         setMsg({ ok: true, text: r.message ?? "Saved." });
         router.refresh();
       }
@@ -115,7 +106,8 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
         <h2 className="i9-h3">Client-approved timesheet</h2>
         <p className="muted i9-small">
           <strong>Required.</strong> Upload a screenshot or PDF of this period&apos;s timesheet from your client or vendor portal. It must show
-          that it&apos;s <strong>approved</strong> (the Approved status or approver) and the hours per day. We check it automatically when you submit.
+          that it&apos;s <strong>approved</strong> (the Approved status or approver) and the hours per day. HR approves your timesheet only after
+          checking this file.
         </p>
         {files.map((f) => (
           <div key={f.id} className="i9-upload done">
@@ -131,24 +123,11 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
         )}
       </div>
 
-      {ai && (
-        <div className="form-status err i9-stack" role="alert" style={{ gap: 10 }}>
-          <strong>We couldn&apos;t confirm this timesheet is approved</strong>
-          <span>{ai}</span>
-          <span>Upload a clearer or approved copy and submit again. If you&apos;re sure it&apos;s correct, explain in the notes above and submit anyway. HR will review it.</span>
-          <label className="i9-check" style={{ color: "inherit" }}>
-            <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} /> I&apos;ve added a note for HR. Submit anyway.
-          </label>
-          <button type="button" className="btn btn-outline" style={{ alignSelf: "flex-start", background: "#fff" }} disabled={!confirm || pending || !notes.trim()} onClick={() => save(true, true)}>
-            Submit anyway
-          </button>
-        </div>
-      )}
       {msg && <p className={`form-status ${msg.ok ? "ok" : "err"}`} role="status">{msg.text}</p>}
       {editable && (
         <div className="btn-row">
           <button type="button" className="btn btn-primary" disabled={pending || busy || !canSubmit} onClick={() => save(true)} title={canSubmit ? undefined : "You can submit on the last weekday of this period"}>
-            {pending ? "Checking…" : "Submit to HR"}
+            {pending ? "Submitting…" : "Submit to HR"}
           </button>
           <button type="button" className="btn btn-outline" disabled={pending || busy} onClick={() => save(false)}>Save draft</button>
         </div>

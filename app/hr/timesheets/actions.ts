@@ -7,7 +7,6 @@ import { deadlineFor, monthLabel, payDateFor, periodLabel, sheetLabel } from "@/
 import { missingPeriods, monthOverview } from "@/lib/portal/timesheets";
 import type { ActionState } from "../actions";
 import { releaseTimesheet, syncDraftInvoices } from "@/lib/invoices/server";
-import { verifyAndStore } from "@/lib/portal/verify";
 
 export async function reviewTimesheet(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
@@ -16,7 +15,7 @@ export async function reviewTimesheet(_prev: ActionState, formData: FormData): P
   const note = String(formData.get("note") ?? "").trim().slice(0, 500);
   const { data: s } = await db().from("stagity_timesheets").select("*, stagity_people(first_name, email)").eq("id", id).single();
   if (!s) return { error: "Not found." };
-  if (decision === "reject" && !note) return { error: "Add a note telling the consultant what to fix." };
+  if (decision === "reject" && !note) return { error: "Add a comment telling the consultant why, e.g. the timesheet is not approved." };
   if (decision === "approve" && s.status !== "submitted") return { error: "Only submitted timesheets can be approved." };
   if (decision === "reject" && !["submitted", "approved"].includes(s.status)) return { error: "This timesheet can't be sent back." };
   if (decision === "reject") {
@@ -43,7 +42,7 @@ export async function reviewTimesheet(_prev: ActionState, formData: FormData): P
   revalidatePath("/hr/timesheets");
   revalidatePath(`/hr/timesheets/${id}`);
   revalidatePath("/hr/invoices");
-  return { ok: true, message: approved ? `Approved.${invoiceNote}` : "Sent back to the consultant." };
+  return { ok: true, message: approved ? `Approved. The consultant was emailed.${invoiceNote}` : "Rejected. The consultant was emailed your comment." };
 }
 
 export async function remindConsultant(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -67,13 +66,4 @@ export async function remindConsultant(_prev: ActionState, formData: FormData): 
   );
   await audit(null, `hr:${hr}`, "timesheet_reminder_sent", { personId, month, weeks });
   return sent ? { ok: true, message: `Reminder sent to ${p.email}.` } : { error: "Email failed." };
-}
-
-export async function recheckTimesheet(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const hr = await requireHr();
-  const id = String(formData.get("id") ?? "");
-  const r = await verifyAndStore(id);
-  await audit(null, `hr:${hr}`, "timesheet_rechecked", { timesheetId: id, verdict: r.verdict });
-  revalidatePath(`/hr/timesheets/${id}`);
-  return r.error && r.verdict === "unchecked" ? { error: r.error } : { ok: true, message: "Checked again." };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { recheckTimesheet, remindConsultant, reviewTimesheet } from "./actions";
+import { remindConsultant, reviewTimesheet } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 
@@ -25,26 +25,13 @@ export function ReviewForm({ id, status }: { id: string; status: string }) {
     <form action={action} className="form-card">
       <input type="hidden" name="id" value={id} />
       <h2 className="i9-h3">Review</h2>
-      <p className="muted i9-small">Check that the hours match the client-approved timesheet and that it shows the client&apos;s approval.</p>
-      <label className="field">Note to consultant (required to send back)<textarea name="note" rows={2} style={{ minHeight: 70 }} /></label>
+      <p className="muted i9-small">Open the attachment above. Approve only if it shows the client&apos;s approval and the hours match. The consultant is emailed either way.</p>
+      <label className="field">Comment to consultant (required to reject)<textarea name="note" rows={2} style={{ minHeight: 70 }} placeholder="e.g. The timesheet is not approved. Please upload the approved timesheet." /></label>
       <Status s={s} />
       <div className="btn-row">
         {status === "submitted" && <button className="btn btn-primary" name="decision" value="approve" disabled={pending}>Approve</button>}
-        <button className="btn btn-outline" name="decision" value="reject" disabled={pending}>Send back</button>
+        <button className="btn btn-outline" name="decision" value="reject" disabled={pending}>Reject</button>
       </div>
-    </form>
-  );
-}
-
-export function RecheckButton({ id }: { id: string }) {
-  const [s, action, pending] = useActionState(recheckTimesheet, {} as ActionState);
-  return (
-    <form action={action} className="i9-stack" style={{ gap: 6 }}>
-      <input type="hidden" name="id" value={id} />
-      <button className="btn btn-outline" disabled={pending} style={{ alignSelf: "flex-start", minHeight: 38, padding: "6px 16px", fontSize: 14 }}>
-        {pending ? "Checking…" : "Check again"}
-      </button>
-      <Status s={s} />
     </form>
   );
 }
