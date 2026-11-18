@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { audit, db, requireHr, siteOrigin } from "@/lib/i9/server";
 import { sendTimesheetReminder, sendTimesheetReviewed } from "@/lib/portal/mail";
-import { deadlineFor, monthLabel, payDateFor, periodLabel, sheetLabel } from "@/lib/portal/dates";
-import { missingPeriods, monthOverview } from "@/lib/portal/timesheets";
+import { deadlineFor, monthLabel, payDateFor, periodLabel, sheetLabel, shortDate, todayCT } from "@/lib/portal/dates";
+import { missingPeriods, monthOverview, type ConsultantRow } from "@/lib/portal/timesheets";
 import type { ActionState } from "../actions";
 import { releaseTimesheet, syncDraftInvoices } from "@/lib/invoices/server";
 
@@ -45,6 +45,26 @@ export async function reviewTimesheet(_prev: ActionState, formData: FormData): P
   return { ok: true, message: approved ? `Approved. The consultant was emailed.${invoiceNote}` : "Rejected. The consultant was emailed your comment." };
 }
 
+async function sendReminder(p: ConsultantRow, month: string, sheet: Parameters<typeof missingPeriods>[2], hr: string) {
+  const weeks = missingPeriods(p, month, sheet);
+  if (!weeks.length) return { skipped: true as const };
+  const sent = await sendTimesheetReminder(
+    p.email,
+    p.first_name,
+    `Reminder: timesheets for ${monthLabel(month)}`,
+    [
+      `We're still missing your approved timesheets for: ${weeks.map(periodLabel).join(", ")}.`,
+      `Please fill in every weekday (0 for holidays or days off) and upload a screenshot of the approved timesheet from your client or vendor portal. ${monthLabel(month)} timesheets are due ${shortDate(deadlineFor(month))} and must be in before payroll on ${shortDate(payDateFor(month))}.`,
+    ],
+    `${siteOrigin()}/portal`,
+  );
+  if (sent) {
+    await db().from("stagity_reminder_log").insert({ person_id: p.id, kind: "manual", sent_on: todayCT() }); // ignored if already logged today
+    await audit(null, `hr:${hr}`, "timesheet_reminder_sent", { personId: p.id, month, weeks: weeks.map((w) => w.start) });
+  }
+  return { sent, weeks };
+}
+
 export async function remindConsultant(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
   const personId = String(formData.get("personId") ?? "");
@@ -52,18 +72,25 @@ export async function remindConsultant(_prev: ActionState, formData: FormData): 
   const { consultants, sheet } = await monthOverview(month);
   const p = consultants.find((c) => c.id === personId);
   if (!p) return { error: "Not found." };
-  const weeks = missingPeriods(p, month, sheet);
-  if (!weeks.length) return { error: "Nothing is missing for this month." };
-  const sent = await sendTimesheetReminder(
-    p.email,
-    p.first_name,
-    `Reminder: timesheets for ${monthLabel(month)}`,
-    [
-      `We're still missing your approved timesheets for: ${weeks.map(periodLabel).join(", ")}.`,
-      `Please fill in every weekday (0 for holidays or days off) and upload the client-approved timesheets. They were due ${deadlineFor(month)} and must be in before payroll on ${payDateFor(month)}.`,
-    ],
-    `${siteOrigin()}/portal`,
-  );
-  await audit(null, `hr:${hr}`, "timesheet_reminder_sent", { personId, month, weeks });
-  return sent ? { ok: true, message: `Reminder sent to ${p.email}.` } : { error: "Email failed." };
+  const r = await sendReminder(p, month, sheet, hr);
+  if ("skipped" in r) return { error: "Nothing is missing for this month." };
+  revalidatePath("/hr/timesheets");
+  return r.sent ? { ok: true, message: `Reminder sent to ${p.email}.` } : { error: "The email couldn't be sent. Check the timesheets@ email settings." };
+}
+
+export async function remindAll(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const month = String(formData.get("month") ?? "");
+  const { consultants, sheet } = await monthOverview(month);
+  let sent = 0;
+  let failed = 0;
+  for (const p of consultants.filter((c) => c.active)) {
+    const r = await sendReminder(p, month, sheet, hr);
+    if ("skipped" in r) continue;
+    if (r.sent) sent++;
+    else failed++;
+  }
+  revalidatePath("/hr/timesheets");
+  if (!sent && !failed) return { error: "No one is missing timesheets for this month." };
+  return failed ? { error: `Sent ${sent}, but ${failed} couldn't be sent. Check the timesheets@ email settings.` } : { ok: true, message: `Reminders sent to ${sent} consultant${sent === 1 ? "" : "s"}.` };
 }

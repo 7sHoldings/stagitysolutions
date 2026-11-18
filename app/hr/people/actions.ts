@@ -69,12 +69,13 @@ export async function assignConsultant(_prev: ActionState, formData: FormData): 
   return { ok: true, message: "Saved." };
 }
 
-export async function unassignConsultant(formData: FormData) {
+export async function unassignConsultant(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
   const personId = clip(formData.get("personId"), 60);
   await db().from("stagity_people").update({ vendor_id: null }).eq("id", personId);
   await audit(null, `hr:${hr}`, "consultant_unassigned", { personId });
   revalidatePath("/hr/vendors");
+  return { ok: true, message: "Unassigned." };
 }
 
 async function issueTempPassword(id: string) {

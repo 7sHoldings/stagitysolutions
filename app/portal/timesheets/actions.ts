@@ -50,7 +50,9 @@ export async function saveTimesheet(week: string, rawHours: (number | null)[], n
   if (!sheet) return { error: "This timesheet has already been submitted." };
 
   const employed = (d: string) => (!p.start_date || d >= p.start_date) && (!p.end_date || d <= p.end_date);
-  const hours = dates.map((_, i) => {
+  // Weekends can't have hours; anything sent for Saturday/Sunday is ignored.
+  const hours = dates.map((d, i) => {
+    if (isWeekend(d)) return null;
     const h = rawHours[i];
     return h === null || h === undefined || Number.isNaN(Number(h)) ? null : round2(Math.min(24, Math.max(0, Number(h))));
   });

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/i9/server";
 import { requirePerson, TS_BUCKET } from "@/lib/portal/server";
@@ -29,7 +28,6 @@ export default async function TimesheetPage({ params }: { params: Promise<{ week
 
   return (
     <section className="container i9-page" style={{ maxWidth: 880 }}>
-      <p><Link href="/portal">← Portal home</Link></p>
       <div>
         <p className="eyebrow">Timesheet</p>
         <h1 className="h2">{period.start === period.end ? `${dayName(period.start)} ${shortDate(period.start)}` : `${dayName(period.start)} ${shortDate(period.start)} – ${dayName(period.end)} ${shortDate(period.end)}`}</h1>

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { deletePerson, registerPerson, resetPassword, startI9, updatePerson } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
+import { ConfirmAction } from "../Modal";
 
 type P = Partial<{
   id: string; first_name: string; last_name: string; email: string; phone: string | null; kind: string;
@@ -33,15 +34,30 @@ function Fields({ p, isNew }: { p: P; isNew: boolean }) {
   );
 }
 
-export function RegisterForm() {
+export function RegisterForm({ close }: { close?: () => void }) {
   const [s, action, pending] = useActionState(registerPerson, {} as ActionState);
+  if (s.ok) {
+    return (
+      <div className="i9-stack" style={{ gap: 16 }}>
+        <p className="form-status ok">{s.message}</p>
+        <p className="muted i9-small">Next: add them to their vendor on the Vendors page with their pay rate and bill rate.</p>
+        <div className="hr-modal-actions">
+          <a className="btn btn-outline hr-btn-sm" href="/hr/vendors">Go to Vendors</a>
+          {close && <button type="button" className="btn btn-primary hr-btn-sm" onClick={close}>Done</button>}
+        </div>
+      </div>
+    );
+  }
   return (
-    <form action={action} className="i9-stack" key={s.ok ? s.message : "new"} style={{ gap: 18 }}>
-      <p className="muted i9-small">They&apos;ll get an email with the portal link and a temporary password (valid 7 days). Add their pay and bill rates when you add them to a vendor.</p>
+    <form action={action} className="i9-stack" style={{ gap: 18 }}>
+      <p className="muted i9-small">They&apos;ll get an email with the portal link and a temporary password (valid 7 days).</p>
       <Fields p={{}} isNew />
       <label className="i9-check"><input type="checkbox" name="startI9" defaultChecked /> Start their Form I-9 now (uses the start date as the first day of work)</label>
       <Status s={s} />
-      <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Registering…" : "Register and send login"}</button>
+      <div className="hr-modal-actions">
+        {close && <button type="button" className="btn btn-outline hr-btn-sm" onClick={close}>Cancel</button>}
+        <button className="btn btn-primary hr-btn-sm" disabled={pending}>{pending ? "Registering…" : "Register and send login"}</button>
+      </div>
     </form>
   );
 }
@@ -59,18 +75,15 @@ export function EditPersonForm({ p }: { p: P }) {
 }
 
 export function DeletePersonButton({ id, name }: { id: string; name: string }) {
-  const [s, action, pending] = useActionState(deletePerson, {} as ActionState);
   return (
-    <form
-      action={action}
-      onSubmit={(e) => { if (!confirm(`Delete ${name} permanently? This removes their account, timesheets and uploads, and can't be undone.`)) e.preventDefault(); }}
-      className="i9-stack"
-      style={{ gap: 8 }}
-    >
-      <input type="hidden" name="id" value={id} />
-      <button className="btn hr-btn-danger hr-btn-sm" disabled={pending}>{pending ? "Deleting…" : "Delete permanently"}</button>
-      <Status s={s} />
-    </form>
+    <ConfirmAction
+      action={deletePerson}
+      fields={{ id }}
+      label="Delete permanently"
+      title="Delete this person?"
+      message={<>Are you sure you want to delete <strong>{name}</strong>? Their account, timesheets and uploads will be removed. This can&apos;t be undone.</>}
+      confirmLabel="Yes, delete"
+    />
   );
 }
 

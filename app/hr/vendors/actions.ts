@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { audit, db, requireHr } from "@/lib/i9/server";
 import type { ActionState } from "../actions";
+import { assignConsultant } from "../people/actions";
 
 const clip = (v: FormDataEntryValue | null, max = 300) => String(v ?? "").trim().slice(0, max);
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -28,11 +29,25 @@ export async function saveVendor(_prev: ActionState, formData: FormData): Promis
   if (row.cc_emails && !row.cc_emails.split(", ").every(emailOk)) return { error: "Check the CC emails (comma-separated)." };
   if (!Number.isInteger(row.payment_terms_days) || row.payment_terms_days < 0 || row.payment_terms_days > 180) return { error: "Payment terms must be 0–180 days." };
 
-  const { error } = id ? await db().from("stagity_vendors").update(row).eq("id", id) : await db().from("stagity_vendors").insert(row);
-  if (error) return { error: error.message };
-  await audit(null, `hr:${hr}`, id ? "vendor_updated" : "vendor_created", { vendorId: id || null, name: row.name });
+  // Optional first consultant (new vendor only): check before saving anything.
+  const personId = id ? "" : clip(formData.get("personId"), 60);
+  if (personId && (!clip(formData.get("payRate"), 12) || !clip(formData.get("billRate"), 12))) {
+    return { error: "Enter the consultant's pay rate and bill rate, or leave the consultant empty." };
+  }
+
+  const { data: saved, error } = id
+    ? await db().from("stagity_vendors").update(row).eq("id", id).select("id").single()
+    : await db().from("stagity_vendors").insert(row).select("id").single();
+  if (error || !saved) return { error: error?.message ?? "Couldn't save the vendor." };
+  await audit(null, `hr:${hr}`, id ? "vendor_updated" : "vendor_created", { vendorId: saved.id, name: row.name });
+
+  if (personId) {
+    formData.set("vendorId", saved.id);
+    const r = await assignConsultant({}, formData);
+    if (r.error) return { error: `${row.name} was added, but the consultant wasn't: ${r.error}` };
+  }
   revalidatePath("/hr/vendors");
-  return { ok: true, message: id ? "Saved." : `${row.name} added.` };
+  return { ok: true, message: id ? "Saved." : `${row.name} added${personId ? " with its consultant" : ""}.` };
 }
 
 /** Deletes a vendor. Refused if invoices were already sent to it; its consultants are simply unassigned. */

@@ -1,21 +1,70 @@
 "use client";
 
-import { useActionState } from "react";
-import { remindConsultant, reviewTimesheet } from "./actions";
+import { useActionState, useEffect, useState } from "react";
+import { remindAll, remindConsultant, reviewTimesheet } from "./actions";
+import { Modal } from "../Modal";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 
-export function RemindButton({ personId, month }: { personId: string; month: string }) {
+/** Shows exactly what will be emailed, then sends from timesheets@. */
+export function RemindButton({ personId, month, name, email, missing, monthName, remindedToday }: {
+  personId: string; month: string; name: string; email: string; missing: string[]; monthName: string; remindedToday: boolean;
+}) {
+  const [open, setOpen] = useState(false);
   const [s, action, pending] = useActionState(remindConsultant, {} as ActionState);
-  if (s.ok) return <span className="i9-small muted">Sent</span>;
+  useEffect(() => { if (s.ok) setOpen(false); }, [s]);
+  if (s.ok) return <span className="hr-sent">✓ Reminded</span>;
   return (
-    <form action={action}>
-      <input type="hidden" name="personId" value={personId} />
-      <input type="hidden" name="month" value={month} />
-      <button className="btn btn-outline" style={{ minHeight: 34, padding: "4px 12px", fontSize: 13 }} disabled={pending} title={s.error}>
-        {pending ? "…" : s.error ? "Retry" : "Remind"}
+    <>
+      <button type="button" className={`btn hr-btn-xs ${remindedToday ? "btn-outline" : "hr-btn-remind"}`} onClick={() => setOpen(true)}>
+        {remindedToday ? "Remind again" : "Send reminder"}
       </button>
-    </form>
+      <Modal open={open} onClose={() => setOpen(false)} title={`Remind ${name}?`}>
+        <form action={action} className="i9-stack" style={{ gap: 16 }}>
+          <input type="hidden" name="personId" value={personId} />
+          <input type="hidden" name="month" value={month} />
+          <div className="hr-preview">
+            <p className="muted i9-small">To {email} · from timesheets@stagitysolutions.com</p>
+            <p><strong>Reminder: timesheets for {monthName}</strong></p>
+            <p className="i9-small">We&apos;re still missing your approved timesheets for:</p>
+            <ul className="hr-missing">{missing.map((m) => <li key={m}>{m}</li>)}</ul>
+          </div>
+          {remindedToday && <p className="muted i9-small">They were already reminded today.</p>}
+          {s.error && <p className="form-status err" role="alert">{s.error}</p>}
+          <div className="hr-modal-actions">
+            <button type="button" className="btn btn-outline hr-btn-sm" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn btn-primary hr-btn-sm" disabled={pending}>{pending ? "Sending…" : "Send reminder"}</button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
+}
+
+export function RemindAllButton({ month, monthName, people }: { month: string; monthName: string; people: { name: string; count: number }[] }) {
+  const [open, setOpen] = useState(false);
+  const [s, action, pending] = useActionState(remindAll, {} as ActionState);
+  useEffect(() => { if (s.ok) setOpen(false); }, [s]);
+  if (!people.length) return null;
+  return (
+    <>
+      <button type="button" className="btn btn-primary hr-btn-sm" onClick={() => setOpen(true)}>
+        Remind all missing ({people.length})
+      </button>
+      {s.ok && <span className="hr-sent">✓ {s.message}</span>}
+      <Modal open={open} onClose={() => setOpen(false)} title={`Send ${monthName} reminders?`}>
+        <form action={action} className="i9-stack" style={{ gap: 16 }}>
+          <input type="hidden" name="month" value={month} />
+          <p className="text">Each of these consultants gets one email from timesheets@ listing exactly which weeks are missing:</p>
+          <ul className="hr-missing">{people.map((p) => <li key={p.name}>{p.name} <span className="muted">· {p.count} week{p.count === 1 ? "" : "s"} missing</span></li>)}</ul>
+          {s.error && <p className="form-status err" role="alert">{s.error}</p>}
+          <div className="hr-modal-actions">
+            <button type="button" className="btn btn-outline hr-btn-sm" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn btn-primary hr-btn-sm" disabled={pending}>{pending ? "Sending…" : `Send ${people.length} reminder${people.length === 1 ? "" : "s"}`}</button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 }
 

@@ -1,7 +1,6 @@
 import { db, requireHr } from "@/lib/i9/server";
 import HrNav from "../HrNav";
-import Panel from "../Panel";
-import { AddConsultant, ConsultantRow, DeleteVendorButton, EditVendor, VendorForm, type Assigned } from "./forms";
+import { AddConsultant, AddVendorButton, ConsultantRow, VendorActions, type Assigned } from "./forms";
 
 export default async function Vendors() {
   const hr = await requireHr();
@@ -22,43 +21,61 @@ export default async function Vendors() {
       <div className="hr-title">
         <div>
           <h1 className="h2">Vendors</h1>
-          <p className="muted">The companies you invoice. Add each consultant to their vendor with their pay rate (payroll) and bill rate (invoice).</p>
+          <p className="muted">The companies you invoice, and the consultants on each with their pay rate (payroll) and bill rate (invoice).</p>
         </div>
+        <AddVendorButton consultants={unassigned} />
       </div>
 
       {unassigned.length > 0 && (
-        <p className="form-status err">Not on a vendor yet: {unassigned.map((p) => p.name).join(", ")}. Add them below so they get paid and invoiced.</p>
+        <div className="hr-notice">
+          <strong>{unassigned.length} consultant{unassigned.length === 1 ? " isn't" : "s aren't"} on a vendor yet:</strong> {unassigned.map((p) => p.name).join(", ")}.
+          Add them to a vendor so they can be paid and invoiced.
+        </div>
       )}
-
-      <Panel label="Add a vendor" title="Add a vendor">
-        <VendorForm />
-      </Panel>
 
       {vendors?.map((v) => {
         const list = (people ?? []).filter((p) => p.vendor_id === v.id).map(toAssigned);
         return (
           <article key={v.id} className={`hr-vendor ${v.active ? "" : "inactive"}`}>
             <div className="hr-vendor-head">
-              <div>
-                <h2 className="i9-h3">{v.name}{!v.active && <span className="i9-badge s-cancelled" style={{ marginLeft: 10 }}>Inactive</span>}</h2>
-                <p className="muted i9-small">
-                  Invoices to {v.ap_email}{v.cc_emails ? ` (cc ${v.cc_emails})` : ""} · {v.billing_cycle === "weekly" ? "weekly" : "monthly"} · {v.payment_terms_days} days
-                </p>
+              <div className="hr-vendor-id">
+                <span className="hr-vendor-logo" aria-hidden="true">{v.name.trim()[0]?.toUpperCase()}</span>
+                <div>
+                  <h2 className="i9-h3">{v.name}</h2>
+                  <div className="hr-chips">
+                    <span className="hr-chip">{v.billing_cycle === "weekly" ? "Weekly invoice" : "Monthly invoice"}</span>
+                    <span className="hr-chip">{v.payment_terms_days} days</span>
+                    <span className="hr-chip">{list.length} consultant{list.length === 1 ? "" : "s"}</span>
+                    {!v.active && <span className="hr-chip off">Inactive</span>}
+                  </div>
+                </div>
               </div>
-              <div className="btn-row">
-                <EditVendor v={v} />
-                <DeleteVendorButton id={v.id} name={v.name} />
+              <VendorActions v={v} />
+            </div>
+            <p className="muted i9-small hr-vendor-mail">
+              Invoices go to <strong>{v.ap_email}</strong>{v.cc_emails ? <> · cc {v.cc_emails}</> : null}
+            </p>
+
+            {list.length > 0 ? (
+              <div className="i9-table-wrap">
+                <table className="i9-table hr-ctable">
+                  <thead><tr><th>Consultant</th><th>Client</th><th className="i9-num">Pay rate</th><th className="i9-num">Bill rate</th><th className="i9-num">Margin</th><th></th></tr></thead>
+                  <tbody>{list.map((c) => <ConsultantRow key={c.id} vendorId={v.id} c={c} />)}</tbody>
+                </table>
               </div>
-            </div>
-            <div className="hr-crows">
-              {list.map((c) => <ConsultantRow key={c.id} vendorId={v.id} c={c} />)}
-              {!list.length && <p className="muted i9-small" style={{ padding: "6px 0" }}>No consultants yet.</p>}
-            </div>
-            <AddConsultant vendorId={v.id} people={unassigned} />
+            ) : (
+              <p className="muted i9-small">No consultants on this vendor yet.</p>
+            )}
+            <AddConsultant vendorId={v.id} vendorName={v.name} people={unassigned} />
           </article>
         );
       })}
-      {!vendors?.length && <p className="muted">No vendors yet. Add your first one above.</p>}
+      {!vendors?.length && (
+        <div className="hr-empty">
+          <strong>No vendors yet</strong>
+          <span className="muted">Add the first company you invoice. You can add its consultant and their rates at the same time.</span>
+        </div>
+      )}
     </section>
   );
 }

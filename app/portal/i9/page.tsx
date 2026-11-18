@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { db } from "@/lib/i9/server";
 import { requirePerson } from "@/lib/portal/server";
 import Section1Form from "./Section1Form";
@@ -16,7 +15,6 @@ export default async function PortalI9() {
 
   return (
     <section className="container i9-page" style={{ maxWidth: 880 }}>
-      <p><Link href="/portal">← Portal home</Link></p>
       <div>
         <p className="eyebrow">Form I-9 · Employment Eligibility Verification</p>
         <h1 className="h2">Form I-9</h1>

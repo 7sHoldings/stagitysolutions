@@ -1,15 +1,16 @@
 import Link from "next/link";
 import { db } from "@/lib/i9/server";
 import { requirePerson } from "@/lib/portal/server";
-import { addMonths, dayName, deadlineFor, monthLabel, monthStart, payDateFor, periodsInMonth, shortDate, submitFrom, todayCT, type Period } from "@/lib/portal/dates";
+import { addMonths, dayName, deadlineFor, monthLabel, monthStart, payDateFor, periodFor, periodsInMonth, shortDate, submitFrom, todayCT, type Period } from "@/lib/portal/dates";
 
 const rangeLabel = (x: Period) => (x.start === x.end ? `${dayName(x.start)} ${shortDate(x.start)}` : `${dayName(x.start)} ${shortDate(x.start)} – ${dayName(x.end)} ${shortDate(x.end)}`);
 
 const tsLabel: Record<string, string> = { draft: "Draft", submitted: "Waiting for HR", approved: "Approved", rejected: "Not approved" };
 const tsClass: Record<string, string> = { draft: "s-invited", submitted: "s-everify_submitted", approved: "s-closed", rejected: "s-section1_complete" };
 
-export default async function PortalHome() {
+export default async function PortalHome({ searchParams }: { searchParams: Promise<{ submitted?: string }> }) {
   const p = await requirePerson();
+  const submitted = (await searchParams).submitted;
   const today = todayCT();
   const { data: i9 } = await db()
     .from("stagity_i9_cases")
@@ -45,6 +46,11 @@ export default async function PortalHome() {
       <div>
         <h1 className="h2">Hi, {p.first_name}</h1>
       </div>
+      {submitted && /^\d{4}-\d{2}-\d{2}$/.test(submitted) && (
+        <p className="form-status ok" role="status">
+          ✓ Your timesheet for {rangeLabel(periodFor(submitted))} was submitted. HR will review it and you&apos;ll get an email when it&apos;s approved.
+        </p>
+      )}
 
       {i9?.status === "invited" && (
         <Link href="/portal/i9" className="i9-task">

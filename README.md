@@ -57,7 +57,7 @@ Every question typed in the chat is logged to `stagity_chat_questions`. Check ro
 
 Reached from the **Sign in** button in the site header (`/sign-in`: Employee sign in → `/portal/login`, Admin sign in → `/hr/login`). Blocked from search engines.
 
-**Accounts.** HR signs in at `/hr/login` with a 6-digit code emailed to an address in `HR_EMAILS`. HR registers each consultant or employee
+**Accounts.** HR signs in at `/hr/login` with email + password (the first time, or after forgetting it, a 6-digit code emailed to an address in `HR_EMAILS` lets them set the password). HR registers each consultant or employee
 on **People** (name, email, phone, start date). Pay rate, bill rate, client and PO are set when the consultant is added to a vendor on **Vendors**.
 People and vendors can be deleted unless they have records that must be kept (sent invoices, locked payroll, completed I-9); deactivate those instead. The system emails them the portal link and a temporary
 password (valid 7 days); on first sign-in they must choose their own password. They can change it any time, or reset it themselves with

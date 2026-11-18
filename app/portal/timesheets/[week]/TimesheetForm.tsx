@@ -101,9 +101,13 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
     start(async () => {
       const r = await saveTimesheet(week, hours.map((h) => (h.trim() === "" ? null : Number(h))), notes, submit);
       if (r.error) setMsg({ text: r.error });
-      else {
+      else if (submit) {
+        // Back to the timesheet list; the hours are now locked until HR reviews them.
         setSaved(snapshot(hours, notes));
-        setMsg({ ok: true, text: submit ? (r.message ?? "Submitted.") : "Draft saved. Your hours are kept, so you can come back and finish this week later." });
+        router.replace(`/portal?submitted=${week}`);
+      } else {
+        setSaved(snapshot(hours, notes));
+        setMsg({ ok: true, text: "Draft saved. Your hours are kept, so you can come back and finish this week later." });
         router.refresh();
       }
     });
@@ -117,7 +121,11 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
           <span className="ts-num">1</span>
           <div>
             <h2 className="i9-h3">Hours worked</h2>
-            <p className="muted i9-small">Every weekday is required. Enter 0 for holidays, PTO or days off. Weekends are optional.</p>
+            <p className="muted i9-small">
+              {editable
+                ? "Enter hours for every weekday (Mon–Fri). Put 0 for holidays, PTO or days off. Weekends can't have hours."
+                : "Submitted hours are locked. If something is wrong, contact HR; they can send it back for you to fix."}
+            </p>
           </div>
         </div>
 
@@ -125,7 +133,7 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
           <div className="ts-quick">
             <button type="button" className="ts-chip" onClick={() => fillWeekdays("8")}>8 h every weekday</button>
             <button type="button" className="ts-chip" onClick={() => fillWeekdays("0")}>0 every weekday</button>
-            <button type="button" className="ts-chip" onClick={() => setHours(dates.map(() => ""))}>Clear</button>
+            <button type="button" className="ts-chip" onClick={() => fillWeekdays("")}>Clear</button>
           </div>
         )}
 
@@ -133,24 +141,29 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
           {dates.map((d, i) => {
             const weekend = isWeekend(d);
             const can = employed(d);
-            const needed = !weekend && can && hours[i].trim() === "";
+            const needed = editable && !weekend && can && hours[i].trim() === "";
+            const locked = !editable || !can || weekend;
             return (
-              <label key={d} className={`ts-day ${weekend ? "weekend" : ""} ${needed ? "need" : ""} ${!can ? "off" : ""}`}>
+              <label key={d} className={`ts-day ${weekend ? "weekend" : ""} ${needed ? "need" : ""} ${!can ? "off" : ""} ${locked ? "locked" : ""}`}>
                 <span className="ts-day-name">
                   <strong>{dayName(d)}</strong>
                   <span>{shortDate(d)}</span>
                 </span>
-                <span className="ts-day-tag">{!can ? "Not employed" : weekend ? "Optional" : needed ? "Required" : ""}</span>
-                <span className="ts-day-input">
-                  <input
-                    type="number" inputMode="decimal" min={0} max={24} step={0.25}
-                    value={hours[i]} disabled={!editable || !can}
-                    onChange={(e) => setDay(i, e.target.value)}
-                    placeholder="–"
-                    aria-label={`Hours on ${dayName(d)} ${shortDate(d)}`}
-                  />
-                  <span className="ts-unit">h</span>
-                </span>
+                <span className="ts-day-tag">{weekend ? "Weekend" : !can ? "Not employed" : needed ? "Required" : ""}</span>
+                {locked ? (
+                  <span className="ts-day-value">{weekend ? "—" : hours[i].trim() === "" ? "—" : `${Number(hours[i])} h`}</span>
+                ) : (
+                  <span className="ts-day-input">
+                    <input
+                      type="number" inputMode="decimal" min={0} max={24} step={0.25}
+                      value={hours[i]}
+                      onChange={(e) => setDay(i, e.target.value)}
+                      placeholder="–"
+                      aria-label={`Hours on ${dayName(d)} ${shortDate(d)}`}
+                    />
+                    <span className="ts-unit">h</span>
+                  </span>
+                )}
               </label>
             );
           })}
@@ -201,12 +214,16 @@ export default function TimesheetForm({ week, dates, initialHours, initialNotes,
           <span className="ts-num">3</span>
           <div>
             <h2 className="i9-h3">{editable ? "Notes & submit" : "Notes"}</h2>
-            <p className="muted i9-small">Optional. Anything HR should know, e.g. a holiday or a correction.</p>
+            {editable && <p className="muted i9-small">Optional. Anything HR should know, e.g. a holiday or a correction.</p>}
           </div>
         </div>
         <label className="field">
           <span className="sr-only">Notes for HR</span>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} disabled={!editable} rows={3} style={{ minHeight: 90 }} placeholder="e.g. Thanksgiving holiday on Thursday" />
+          {editable ? (
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ minHeight: 90 }} placeholder="e.g. Thanksgiving holiday on Thursday" />
+          ) : (
+            <span className="ts-notes-ro">{notes || "No notes"}</span>
+          )}
         </label>
 
         {msg && <p id="ts-msg" className={`form-status ${msg.ok ? "ok" : "err"}`} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
