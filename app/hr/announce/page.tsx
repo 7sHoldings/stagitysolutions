@@ -19,6 +19,12 @@ export default async function Announce() {
   const defaultMonth = addMonths(monthStart(today), 1).slice(0, 7);
   const defaultAckBy = addDays(today, 7);
   const previewMonth = `${defaultMonth}-01`;
+  // Pre-fill the send box with the saved list, minus anyone already emailed.
+  const used = new Set(rows.filter((r) => r.sent_at).map((r) => r.email.toLowerCase()));
+  const pendingDraft = (draft?.value ?? "")
+    .split(/\r?\n/)
+    .filter((l) => l.trim() && ![...used].some((e) => l.toLowerCase().includes(e)))
+    .join("\n");
 
   return (
     <section className="container hr-page">
@@ -73,7 +79,7 @@ export default async function Announce() {
         );
       })}
 
-      <SendForm defaultRecipients={campaigns.length ? "" : draft?.value ?? ""} defaultMonth={defaultMonth} defaultAckBy={defaultAckBy} />
+      <SendForm defaultRecipients={pendingDraft} defaultMonth={defaultMonth} defaultAckBy={defaultAckBy} />
     </section>
   );
 }
