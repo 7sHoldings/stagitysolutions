@@ -55,7 +55,9 @@ password (valid 7 days); on first sign-in they must choose their own password. H
 
 **Form I-9** (DHS alternative procedure for E-Verify employers). HR starts it when registering someone (or from their profile). The employee signs in,
 completes Section 1, uploads document photos and e-signs. HR reviews the copies, holds a live video call where the employee shows the same originals,
-completes and signs Section 2, then records the E-Verify case number and result. "Print / save as PDF" produces the record.
+completes and signs Section 2, then records the E-Verify case number and result. **Official Form I-9 (PDF)** fills the USCIS form
+(`lib/i9/assets/i-9.pdf`, edition 01/20/25, expires 05/31/2027) and appends the document copies. When USCIS publishes a new edition, replace
+that file and re-check the field names in `lib/i9/pdf.ts`.
 
 **Timesheets.** Consultants enter hours per day for each week (Mon–Sun) and upload the timesheet their client approved in the client portal.
 HR approves or sends back with a note. Overtime (over 40 h/week) is calculated automatically.

@@ -61,7 +61,12 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </div>
         <div className="i9-stack" style={{ alignItems: "flex-end" }}>
           <span className={`i9-badge s-${c.status}`}>{statusLabels[c.status] ?? c.status}</span>
-          {s1 && <PrintButton />}
+          {s1 && (
+            <div className="btn-row no-print">
+              <a className="btn btn-primary" href={`/hr/cases/${id}/pdf`} target="_blank" rel="noreferrer">Official Form I-9 (PDF)</a>
+              <PrintButton />
+            </div>
+          )}
         </div>
       </div>
 
