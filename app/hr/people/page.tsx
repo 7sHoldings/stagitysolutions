@@ -10,7 +10,7 @@ export default async function People() {
   const hr = await requireHr();
   const { data: people } = await db()
     .from("stagity_people")
-    .select("id, first_name, last_name, email, kind, active, client_name, pay_rate, bill_rate, must_change_password, stagity_vendors(name)")
+    .select("id, first_name, last_name, email, kind, active, client_name, pay_rate, bill_rate, must_change_password, monthly_pay, stagity_vendors(name)")
     .order("last_name");
   return (
     <section className="container hr-page">
@@ -33,16 +33,18 @@ export default async function People() {
                 <span className="hr-avatar" aria-hidden="true">{(p.first_name[0] ?? "").toUpperCase()}{(p.last_name[0] ?? "").toUpperCase()}</span>
                 <Link href={`/hr/people/${p.id}`} className="hr-person-main">
                   <strong>{name}</strong>
-                  <span className="muted i9-small">{p.email}</span>
+                  <span className="muted i9-small">{p.email ?? "Payroll only (no login)"}</span>
                   <span className="i9-small">
                     {p.kind === "employee" ? "Employee" : vendor ? `${vendor}${p.client_name ? ` · ${p.client_name}` : ""}` : <span style={{ color: "#b45309" }}>Not on a vendor yet</span>}
                   </span>
                 </Link>
                 <span className="hr-person-side">
-                  <span className={`i9-badge ${!p.active ? "s-cancelled" : p.must_change_password ? "s-section1_complete" : "s-closed"}`}>
-                    {!p.active ? "Inactive" : p.must_change_password ? "Invited" : "Active"}
+                  <span className={`i9-badge ${!p.active ? "s-cancelled" : !p.email || !p.must_change_password ? "s-closed" : "s-section1_complete"}`}>
+                    {!p.active ? "Inactive" : !p.email ? "Active" : p.must_change_password ? "Invited" : "Active"}
                   </span>
-                  {p.pay_rate != null && (
+                  {p.monthly_pay != null ? (
+                    <span className="muted i9-small">Pay {money(Number(p.monthly_pay))}/mo{p.bill_rate != null ? ` · Bill ${money(Number(p.bill_rate))}/h` : ""}</span>
+                  ) : p.pay_rate != null && (
                     <span className="muted i9-small">Pay {money(Number(p.pay_rate))}/h{p.bill_rate != null ? ` · Bill ${money(Number(p.bill_rate))}/h` : ""}</span>
                   )}
                   <span className="hr-person-actions">

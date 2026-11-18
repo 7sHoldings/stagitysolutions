@@ -40,22 +40,69 @@ export async function recalculate(formData: FormData) {
   revalidatePath(`/hr/payroll/${id}`);
 }
 
+/**
+ * Edits one payroll line. Changing hours, rate or the flat amount marks the line as edited by hand,
+ * so "Recalculate" keeps HR's numbers. Bonus / reimbursement / note alone don't.
+ */
 export async function saveItem(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
   const id = String(formData.get("id") ?? "");
-  const { data: item } = await db().from("stagity_payroll_items").select("run_id").eq("id", id).single();
+  const { data: item } = await db().from("stagity_payroll_items").select("*").eq("id", id).single();
   if (!item || !(await draftRun(item.run_id))) return { error: "This payroll is locked." };
-  const num = (k: string) => Math.round((Number(formData.get(k)) || 0) * 100) / 100;
-  const bonus = num("bonus");
-  const reimbursement = num("reimbursement");
-  if (bonus < 0 || reimbursement < 0) return { error: "Amounts can't be negative." };
-  await db()
-    .from("stagity_payroll_items")
-    .update({ bonus, reimbursement, note: String(formData.get("note") ?? "").slice(0, 300) || null })
-    .eq("id", id);
-  await audit(null, `hr:${hr}`, "payroll_item_updated", { itemId: id, bonus, reimbursement });
+  const raw = (k: string) => String(formData.get(k) ?? "").trim();
+  const num = (k: string) => Math.round((Number(raw(k)) || 0) * 100) / 100;
+  const payType = raw("payType") === "flat" ? "flat" : "hourly";
+  const update = {
+    regular_hours: num("regular"),
+    overtime_hours: num("overtime"),
+    rate: num("rate"),
+    flat_amount: payType === "flat" ? num("flat") : null,
+    bonus: num("bonus"),
+    reimbursement: num("reimbursement"),
+    note: raw("note").slice(0, 300) || null,
+  };
+  if (Object.values(update).some((v) => typeof v === "number" && (v < 0 || v > 1_000_000))) return { error: "Amounts must be between 0 and 1,000,000." };
+  if (payType === "flat" && !raw("flat")) return { error: "Enter the flat amount, or switch to hourly." };
+  const changed =
+    update.regular_hours !== Number(item.regular_hours) ||
+    update.overtime_hours !== Number(item.overtime_hours) ||
+    update.rate !== Number(item.rate) ||
+    (update.flat_amount ?? null) !== (item.flat_amount == null ? null : Number(item.flat_amount));
+  await db().from("stagity_payroll_items").update({ ...update, manual: item.manual || changed }).eq("id", id);
+  await audit(null, `hr:${hr}`, "payroll_item_updated", { itemId: id, ...update, manual: item.manual || changed });
   revalidatePath(`/hr/payroll/${item.run_id}`);
   return { ok: true, message: "Saved" };
+}
+
+/** Throws away HR's hand edits on a line and recalculates it from timesheets / the person's pay setup. */
+export async function resetItem(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = String(formData.get("id") ?? "");
+  const { data: item } = await db().from("stagity_payroll_items").select("run_id").eq("id", id).single();
+  const run = item ? await draftRun(item.run_id) : null;
+  if (!item || !run) return { error: "This payroll is locked." };
+  await db().from("stagity_payroll_items").update({ manual: false }).eq("id", id);
+  await rebuildItems(run);
+  await audit(null, `hr:${hr}`, "payroll_item_reset", { itemId: id });
+  revalidatePath(`/hr/payroll/${item.run_id}`);
+  return { ok: true, message: "Recalculated" };
+}
+
+/** Adds someone to this month's payroll by hand (e.g. a one-off payment). */
+export async function addItem(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const runId = String(formData.get("runId") ?? "");
+  const personId = String(formData.get("personId") ?? "");
+  if (!(await draftRun(runId))) return { error: "This payroll is locked." };
+  if (!personId) return { error: "Choose a person." };
+  const { data: dup } = await db().from("stagity_payroll_items").select("id").eq("run_id", runId).eq("person_id", personId).maybeSingle();
+  if (dup) return { error: "They're already on this payroll. Edit their line instead." };
+  const amount = Math.round((Number(formData.get("amount")) || 0) * 100) / 100;
+  if (amount <= 0) return { error: "Enter the amount to pay." };
+  await db().from("stagity_payroll_items").insert({ run_id: runId, person_id: personId, flat_amount: amount, manual: true, note: String(formData.get("note") ?? "").slice(0, 300) || null });
+  await audit(null, `hr:${hr}`, "payroll_item_added", { runId, personId, amount });
+  revalidatePath(`/hr/payroll/${runId}`);
+  return { ok: true, message: "Added" };
 }
 
 export async function lockRun(formData: FormData) {

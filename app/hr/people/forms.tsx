@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { deletePerson, registerPerson, resetPassword, startI9, updatePerson } from "./actions";
+import { deletePerson, registerPerson, resetPassword, setPay, startI9, updatePerson } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 import { ConfirmAction, ModalButton } from "../Modal";
@@ -16,7 +16,7 @@ export function RegisterButton() {
 }
 
 type P = Partial<{
-  id: string; first_name: string; last_name: string; email: string; phone: string | null; kind: string;
+  id: string; first_name: string; last_name: string; email: string | null; phone: string | null; kind: string;
   client_name: string | null; client_manager_name: string | null; client_manager_email: string | null;
   pay_rate: number | null; start_date: string | null; end_date: string | null; adp_employee_id: string | null;
   vendor_id: string | null; bill_rate: number | null; bill_ot_rate: number | null; po_number: string | null;
@@ -28,7 +28,10 @@ function Fields({ p, isNew }: { p: P; isNew: boolean }) {
     <div className="form-grid">
       <label className="field">First name<input name="first" defaultValue={p.first_name} required /></label>
       <label className="field">Last name<input name="last" defaultValue={p.last_name} required /></label>
-      <label className="field">Email (their login){isNew ? <input name="email" type="email" required placeholder="name@email.com" /> : <input value={p.email} disabled />}</label>
+      <label className="field">
+        <span>Email (their login){isNew && <span className="field-hint"> (employees: leave empty for payroll only)</span>}</span>
+        {isNew ? <input name="email" type="email" placeholder="name@email.com" /> : p.email ? <input value={p.email} disabled /> : <input name="email" type="email" placeholder="Add an email to give them a login" />}
+      </label>
       <label className="field">Phone<input name="phone" type="tel" defaultValue={p.phone ?? ""} /></label>
       <label className="field">Type
         <select name="kind" defaultValue={p.kind ?? "consultant"}>
@@ -115,6 +118,22 @@ export function StartI9Form({ id, startDate }: { id: string; startDate: string }
       <label className="field" style={{ maxWidth: 260 }}>First day of work<input name="firstDay" type="date" defaultValue={startDate} /></label>
       <Status s={s} />
       <button className="btn btn-outline" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Starting…" : "Start Form I-9"}</button>
+    </form>
+  );
+}
+
+/** Payroll pay for someone not on a vendor: flat monthly amount and/or hourly rate. */
+export function PayForm({ id, payRate, monthlyPay }: { id: string; payRate: number | null; monthlyPay: number | null }) {
+  const [s, action, pending] = useActionState(setPay, {} as ActionState);
+  return (
+    <form action={action} className="i9-stack" style={{ gap: 14 }}>
+      <input type="hidden" name="personId" value={id} />
+      <div className="form-grid">
+        <label className="field"><span>Flat monthly pay ($)<span className="field-hint"> (paid every month)</span></span><input name="monthlyPay" type="number" step="0.01" min="0" defaultValue={monthlyPay ?? ""} placeholder="e.g. 100" /></label>
+        <label className="field"><span>Or hourly rate ($/h)<span className="field-hint"> (from timesheets)</span></span><input name="payRate" type="number" step="0.01" min="0" defaultValue={payRate ?? ""} /></label>
+      </div>
+      <Status s={s} />
+      <button className="btn btn-primary hr-btn-sm" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Save pay"}</button>
     </form>
   );
 }

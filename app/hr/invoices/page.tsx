@@ -28,7 +28,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
       .limit(500),
     db()
       .from("stagity_people")
-      .select("id, first_name, last_name, active, start_date, end_date, vendor_id, stagity_vendors(name)")
+      .select("id, first_name, last_name, active, start_date, end_date, vendor_id, stagity_vendors(name, send_invoices)")
       .eq("kind", "consultant")
       .order("last_name"),
   ]);
@@ -46,6 +46,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
   const overlaps = (r: Row, m: string) => r.period_start <= monthEnd(m) && r.period_end >= m;
   type Status = "paid" | "sent" | "overdue" | "draft" | "missing" | "progress";
   const people = (consultants ?? []).filter((p) => {
+    if ((p.stagity_vendors as unknown as { send_invoices: boolean } | null)?.send_invoices === false) return false; // vendor not invoiced
     const employed = (!p.start_date || p.start_date <= monthEnd(month)) && (!p.end_date || p.end_date >= month);
     return (employed && p.active) || rows.some((r) => r.person_id === p.id && overlaps(r, month));
   });
@@ -68,13 +69,14 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
   // Approved hours that can't be invoiced because the consultant has no vendor or bill rate.
   const { data: loose } = await db()
     .from("stagity_timesheet_days")
-    .select("person_id, stagity_timesheets!inner(status), stagity_people!inner(first_name, last_name, vendor_id, bill_rate)")
+    .select("person_id, stagity_timesheets!inner(status), stagity_people!inner(first_name, last_name, vendor_id, bill_rate, stagity_vendors(send_invoices))")
     .is("invoice_id", null)
     .gt("hours", 0)
     .eq("stagity_timesheets.status", "approved");
   const missingSetup = new Map<string, string>();
   for (const d of loose ?? []) {
-    const p = d.stagity_people as unknown as { first_name: string; last_name: string; vendor_id: string | null; bill_rate: number | null };
+    const p = d.stagity_people as unknown as { first_name: string; last_name: string; vendor_id: string | null; bill_rate: number | null; stagity_vendors: { send_invoices: boolean } | null };
+    if (p.stagity_vendors?.send_invoices === false) continue;
     if (!p.vendor_id || p.bill_rate == null) missingSetup.set(d.person_id, `${p.first_name} ${p.last_name}`);
   }
   const auto = await autoSendEnabled();

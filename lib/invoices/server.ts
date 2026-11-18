@@ -60,10 +60,19 @@ export async function recomputeDraft(invoiceId: string) {
  * Returns a reason if invoicing isn't set up for this person.
  */
 export async function syncDraftInvoices(personId: string): Promise<string | null> {
-  const { data: p } = await db().from("stagity_people").select("id, vendor_id, bill_rate, stagity_vendors(billing_cycle, active)").eq("id", personId).single();
+  const { data: p } = await db().from("stagity_people").select("id, vendor_id, bill_rate, stagity_vendors(billing_cycle, active, send_invoices)").eq("id", personId).single();
   if (!p) return "Not found";
-  const vendor = p.stagity_vendors as unknown as { billing_cycle: "weekly" | "monthly"; active: boolean } | null;
+  const vendor = p.stagity_vendors as unknown as { billing_cycle: "weekly" | "monthly"; active: boolean; send_invoices: boolean } | null;
   if (!p.vendor_id || !vendor) return "No vendor set";
+  if (vendor.send_invoices === false) {
+    // We don't invoice this vendor: remove any leftover drafts and free their hours.
+    const { data: old } = await db().from("stagity_invoices").select("id").eq("person_id", personId).eq("status", "draft");
+    if (old?.length) {
+      await db().from("stagity_timesheet_days").update({ invoice_id: null }).in("invoice_id", old.map((d) => d.id));
+      await db().from("stagity_invoices").delete().in("id", old.map((d) => d.id));
+    }
+    return "Vendor isn't invoiced";
+  }
   if (p.bill_rate == null) return "No bill rate set";
 
   const { data: days } = await db()

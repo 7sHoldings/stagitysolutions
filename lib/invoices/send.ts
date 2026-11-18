@@ -83,6 +83,7 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   const { inv, vendor, person } = loaded;
   if (inv.status !== "draft") return { error: "This invoice was already sent." };
   if (!vendor.active) return { error: `${vendor.name} is marked inactive.` };
+  if ((vendor as Vendor & { send_invoices?: boolean }).send_invoices === false) return { error: `${vendor.name} is set to "We don't invoice".` };
   if (Number(inv.total) <= 0) return { error: "The invoice total is $0. Check the consultant's bill rate." };
 
   const issue = todayCT();

@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/i9/server";
-import { monthEnd, payDateFor, round2 } from "./dates";
+import { monthEnd, monthStart, payDateFor, round2 } from "./dates";
 
 type Run = { id: string; period_month: string; include_late: boolean };
 
@@ -19,7 +19,14 @@ export async function eligibleDays(run: Run) {
   return data ?? [];
 }
 
-/** Rebuilds a draft run's items from timesheets, keeping HR's bonus/reimbursement/notes. */
+/**
+ * Rebuilds a draft run's lines.
+ * - Hourly people: approved timesheet hours × pay rate (overtime 1.5×).
+ * - Flat monthly people (stagity_people.monthly_pay): that amount every month they're active,
+ *   whatever the hours (hours are still shown for reference).
+ * - Lines HR edited by hand (manual) are kept exactly as they are.
+ * Bonus, reimbursement and notes are always kept.
+ */
 export async function rebuildItems(run: Run) {
   const days = await eligibleDays(run);
   const totals = new Map<string, { regular: number; overtime: number }>();
@@ -29,30 +36,65 @@ export async function rebuildItems(run: Run) {
     t.overtime += Number(d.overtime_hours);
     totals.set(d.person_id, t);
   }
-  const [{ data: existing }, { data: people }] = await Promise.all([
+  const start = monthStart(run.period_month);
+  const end = monthEnd(run.period_month);
+  const [{ data: existing }, { data: hourly }, { data: flat }] = await Promise.all([
     db().from("stagity_payroll_items").select("*").eq("run_id", run.id),
-    db().from("stagity_people").select("id, pay_rate").in("id", [...totals.keys()].length ? [...totals.keys()] : ["00000000-0000-0000-0000-000000000000"]),
+    db().from("stagity_people").select("id, pay_rate, monthly_pay").in("id", totals.size ? [...totals.keys()] : ["00000000-0000-0000-0000-000000000000"]),
+    // Everyone on a flat monthly amount who worked for us at some point in this month.
+    db().from("stagity_people").select("id, pay_rate, monthly_pay, start_date, end_date, active").gt("monthly_pay", 0),
   ]);
-  const rate = new Map((people ?? []).map((p) => [p.id, Number(p.pay_rate ?? 0)]));
+  const people = new Map<string, { pay_rate: number | null; monthly_pay: number | null }>();
+  for (const p of hourly ?? []) people.set(p.id, p);
+  const flatIds = new Set<string>();
+  for (const p of flat ?? []) {
+    const inMonth = (!p.start_date || p.start_date <= end) && (!p.end_date || p.end_date >= start);
+    // Inactive people are only paid flat if they have an end date inside this month (their last month).
+    if (inMonth && (p.active || (p.end_date && p.end_date >= start))) {
+      people.set(p.id, p);
+      flatIds.add(p.id);
+    }
+  }
   const keep = new Map((existing ?? []).map((i) => [i.person_id, i]));
-  const ids = new Set([...totals.keys(), ...[...keep.values()].filter((i) => Number(i.bonus) || Number(i.reimbursement) || i.note).map((i) => i.person_id)]);
-  const rows = [...ids].map((pid) => ({
-    run_id: run.id,
-    person_id: pid,
-    regular_hours: round2(totals.get(pid)?.regular ?? 0),
-    overtime_hours: round2(totals.get(pid)?.overtime ?? 0),
-    rate: keep.get(pid)?.rate && !totals.has(pid) ? Number(keep.get(pid)!.rate) : rate.get(pid) ?? Number(keep.get(pid)?.rate ?? 0),
-    bonus: Number(keep.get(pid)?.bonus ?? 0),
-    reimbursement: Number(keep.get(pid)?.reimbursement ?? 0),
-    note: keep.get(pid)?.note ?? null,
-  }));
+  const ids = new Set([
+    ...totals.keys(),
+    ...flatIds,
+    ...[...keep.values()].filter((i) => i.manual || Number(i.bonus) || Number(i.reimbursement) || i.note).map((i) => i.person_id),
+  ]);
+  const rows = [...ids].map((pid) => {
+    const old = keep.get(pid);
+    const extras = { bonus: Number(old?.bonus ?? 0), reimbursement: Number(old?.reimbursement ?? 0), note: old?.note ?? null };
+    if (old?.manual) {
+      return { run_id: run.id, person_id: pid, regular_hours: Number(old.regular_hours), overtime_hours: Number(old.overtime_hours), rate: Number(old.rate), flat_amount: old.flat_amount == null ? null : Number(old.flat_amount), manual: true, ...extras };
+    }
+    const p = people.get(pid);
+    const monthly = p?.monthly_pay != null && Number(p.monthly_pay) > 0 ? Number(p.monthly_pay) : null;
+    return {
+      run_id: run.id,
+      person_id: pid,
+      regular_hours: round2(totals.get(pid)?.regular ?? 0),
+      overtime_hours: round2(totals.get(pid)?.overtime ?? 0),
+      rate: p?.pay_rate != null ? Number(p.pay_rate) : Number(old?.rate ?? 0),
+      flat_amount: monthly,
+      manual: false,
+      ...extras,
+    };
+  });
   await db().from("stagity_payroll_items").delete().eq("run_id", run.id);
   if (rows.length) await db().from("stagity_payroll_items").insert(rows);
   return days;
 }
 
-export const gross = (i: { regular_hours: number; overtime_hours: number; rate: number; bonus: number }) =>
-  round2(Number(i.regular_hours) * Number(i.rate) + Number(i.overtime_hours) * Number(i.rate) * 1.5 + Number(i.bonus));
+type Line = { regular_hours: number; overtime_hours: number; rate: number; bonus: number; flat_amount?: number | null };
+
+/** True when the line pays a flat amount instead of hours × rate. */
+export const isFlat = (i: Line) => i.flat_amount != null;
+
+/** Gross pay: flat amount (if set) or regular × rate + overtime × rate × 1.5, plus bonus. */
+export const gross = (i: Line) =>
+  round2(
+    (isFlat(i) ? Number(i.flat_amount) : Number(i.regular_hours) * Number(i.rate) + Number(i.overtime_hours) * Number(i.rate) * 1.5) + Number(i.bonus),
+  );
 
 /** Creates (or returns) the draft payroll run for a month and refreshes it from approved timesheets. */
 export async function ensureDraftRun(period: string, actor: string) {
@@ -74,11 +116,12 @@ const csvCell = (v: unknown) => {
 export async function payrollCsv(runId: string) {
   const { data: run } = await db().from("stagity_payroll_runs").select("*").eq("id", runId).single();
   const { data: items } = await db().from("stagity_payroll_items").select("*, stagity_people(first_name, last_name, adp_employee_id)").eq("run_id", runId);
-  const header = ["Employee ID", "Last Name", "First Name", "Regular Hours", "Overtime Hours", "Rate", "Bonus", "Reimbursement", "Gross Pay", "Pay Date", "Period", "Note"];
+  (items ?? []).sort((a, b) => String((a.stagity_people as { last_name: string }).last_name).localeCompare(String((b.stagity_people as { last_name: string }).last_name)));
+  const header = ["Employee ID", "Last Name", "First Name", "Regular Hours", "Overtime Hours", "Rate", "Salary", "Bonus", "Reimbursement", "Gross Pay", "Pay Date", "Period", "Note"];
   const lines = (items ?? []).map((i) => {
     const p = i.stagity_people as { first_name: string; last_name: string; adp_employee_id: string | null };
     return [p.adp_employee_id ?? "", p.last_name, p.first_name, Number(i.regular_hours).toFixed(2), Number(i.overtime_hours).toFixed(2),
-      Number(i.rate).toFixed(2), Number(i.bonus).toFixed(2), Number(i.reimbursement).toFixed(2), gross(i).toFixed(2), run?.pay_date ?? "",
+      isFlat(i) ? "" : Number(i.rate).toFixed(2), isFlat(i) ? Number(i.flat_amount).toFixed(2) : "", Number(i.bonus).toFixed(2), Number(i.reimbursement).toFixed(2), gross(i).toFixed(2), run?.pay_date ?? "",
       (run?.period_month ?? "").slice(0, 7), i.note ?? ""].map(csvCell).join(",");
   });
   return {

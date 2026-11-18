@@ -721,3 +721,10 @@ a.inv-cell:hover { outline: 2px solid currentColor; outline-offset: -2px; }
 .help-q summary { cursor: pointer; font-weight: 600; }
 .help-q p { margin-top: 8px; color: var(--body); line-height: 1.6; }
 @media (max-width: 560px) { .help-card { padding: 20px; } }
+
+/* Segmented toggle (payroll pay type) */
+.hr-seg { display: inline-flex; border: 1px solid #d1d5db; border-radius: 999px; padding: 3px; gap: 2px; align-self: flex-start; background: #f9fafb; }
+.hr-seg button { border: 0; background: transparent; padding: 7px 16px; border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer; color: #374151; }
+.hr-seg button.on { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; color: #111827; }
+.pay-tag { display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #3730a3; margin-left: 6px; vertical-align: middle; }
+.pay-tag.edited { background: #fef3c7; color: #92400e; }

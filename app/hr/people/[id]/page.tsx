@@ -5,7 +5,7 @@ import { statusLabels } from "@/lib/i9/forms";
 import { money, sheetLabel } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
 import { setActive } from "../actions";
-import { DeletePersonButton, EditPersonForm, ResetPasswordForm, StartI9Form } from "../forms";
+import { DeletePersonButton, EditPersonForm, PayForm, ResetPasswordForm, StartI9Form } from "../forms";
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const hr = await requireHr();
@@ -27,8 +27,8 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
           <p><Link href="/hr/people">← People</Link></p>
           <h1 className="h2">{p.first_name} {p.last_name}</h1>
           <p className="muted">
-            {p.email} · {p.kind === "employee" ? "Employee" : "Consultant"}
-            {p.last_login_at ? ` · last signed in ${new Date(p.last_login_at).toLocaleDateString("en-US")}` : " · hasn't signed in yet"}
+            {p.email ?? "No portal login (payroll only)"} · {p.kind === "employee" ? "Employee" : "Consultant"}
+            {!p.email ? "" : p.last_login_at ? ` · last signed in ${new Date(p.last_login_at).toLocaleDateString("en-US")}` : " · hasn't signed in yet"}
           </p>
         </div>
         <span className={`i9-badge ${!p.active ? "s-cancelled" : p.must_change_password ? "s-section1_complete" : "s-closed"}`}>
@@ -50,7 +50,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
                 <dl className="i9-dl">
                   <div className="i9-row"><dt>Vendor</dt><dd>{vendor ?? "—"}</dd></div>
                   <div className="i9-row"><dt>Client</dt><dd>{p.client_name ?? "—"}{p.client_manager_name ? ` · ${p.client_manager_name}` : ""}</dd></div>
-                  <div className="i9-row"><dt>Pay rate</dt><dd>{p.pay_rate != null ? `${money(Number(p.pay_rate))}/h` : "—"}</dd></div>
+                  <div className="i9-row"><dt>Pay</dt><dd>{p.monthly_pay != null ? `${money(Number(p.monthly_pay))} flat per month` : p.pay_rate != null ? `${money(Number(p.pay_rate))}/h` : "—"}</dd></div>
                   <div className="i9-row"><dt>Bill rate</dt><dd>{p.bill_rate != null ? `${money(Number(p.bill_rate))}/h` : "—"}</dd></div>
                   <div className="i9-row"><dt>PO / reference</dt><dd>{p.po_number ?? "—"}</dd></div>
                 </dl>
@@ -58,6 +58,14 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
                 <p className="muted">Not added to a vendor yet, so there&apos;s no pay rate for payroll or bill rate for invoices.</p>
               )}
               <Link href="/hr/vendors" className="btn btn-outline hr-btn-sm">{p.vendor_id ? "Edit on Vendors page" : "Add to a vendor"}</Link>
+            </div>
+          )}
+
+          {!p.vendor_id && (
+            <div className="hr-panel">
+              <h2 className="i9-h3">Pay (payroll)</h2>
+              <p className="muted i9-small">For people not on a vendor. A flat monthly amount goes on every month&apos;s ADP sheet while they&apos;re active.</p>
+              <PayForm id={id} payRate={p.pay_rate == null ? null : Number(p.pay_rate)} monthlyPay={p.monthly_pay == null ? null : Number(p.monthly_pay)} />
             </div>
           )}
 

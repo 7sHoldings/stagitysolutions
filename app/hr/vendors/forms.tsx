@@ -1,18 +1,18 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { deleteVendor, saveVendor } from "./actions";
 import { assignConsultant, unassignConsultant } from "../people/actions";
 import { Status } from "../forms";
 import { ConfirmAction, ModalButton } from "../Modal";
 import type { ActionState } from "../actions";
 
-type V = Partial<{ id: string; name: string; ap_email: string; cc_emails: string | null; address: string | null; payment_terms_days: number; billing_cycle: string; attach_timesheets: boolean; active: boolean; notes: string | null }>;
+type V = Partial<{ id: string; send_invoices: boolean; name: string; ap_email: string; cc_emails: string | null; address: string | null; payment_terms_days: number; billing_cycle: string; attach_timesheets: boolean; active: boolean; notes: string | null }>;
 type Person = { id: string; name: string };
 export type Assigned = Person & {
   pay_rate: number | null; bill_rate: number | null; client_name: string | null;
   client_manager_name: string | null; client_manager_email: string | null; po_number: string | null;
-  payment_terms_days: number | null;
+  payment_terms_days: number | null; monthly_pay: number | null;
 };
 
 const L = ({ t, hint }: { t: string; hint?: string }) => <span>{t}{hint && <span className="field-hint"> ({hint})</span>}</span>;
@@ -28,11 +28,12 @@ function useCloseOnSuccess(s: ActionState, close?: () => void) {
   }, [s, close]);
 }
 
-function RateFields({ current }: { current?: Assigned }) {
+function RateFields({ current, invoiced = true }: { current?: Assigned; invoiced?: boolean }) {
   return (
     <div className="form-grid">
       <label className="field"><L t="Pay rate ($/h)" hint="payroll" /><input name="payRate" type="number" step="0.01" min="0" defaultValue={current?.pay_rate ?? ""} placeholder="e.g. 55" /></label>
-      <label className="field"><L t="Bill rate ($/h)" hint="invoice" /><input name="billRate" type="number" step="0.01" min="0" defaultValue={current?.bill_rate ?? ""} placeholder="e.g. 70" /></label>
+      <label className="field"><L t="Or flat monthly pay ($)" hint="optional, replaces hours × rate" /><input name="monthlyPay" type="number" step="0.01" min="0" defaultValue={current?.monthly_pay ?? ""} placeholder="e.g. 7000" /></label>
+      <label className="field"><L t="Bill rate ($/h)" hint={invoiced ? "invoice" : "optional, for your records"} /><input name="billRate" type="number" step="0.01" min="0" defaultValue={current?.bill_rate ?? ""} placeholder="e.g. 70" /></label>
       <label className="field"><L t="Client" hint="optional" /><input name="clientName" defaultValue={current?.client_name ?? ""} /></label>
       <label className="field"><L t="PO / reference" hint="optional" /><input name="poNumber" defaultValue={current?.po_number ?? ""} /></label>
       <label className="field"><L t="Payment terms (days)" hint="empty = vendor default" /><input name="personTerms" type="number" min={0} max={180} defaultValue={current?.payment_terms_days ?? ""} placeholder="e.g. 30" /></label>
@@ -44,6 +45,7 @@ export function VendorForm({ v, close, consultants = [] }: { v?: V; close?: () =
   const [s, action, pending] = useActionState(saveVendor, {} as ActionState);
   useCloseOnSuccess(s, close);
   const isNew = !v?.id;
+  const [invoiced, setInvoiced] = useState(v?.send_invoices ?? true);
   return (
     <form action={action} className="i9-stack" style={{ gap: 16 }}>
       {v?.id && <input type="hidden" name="id" value={v.id} />}
@@ -56,15 +58,19 @@ export function VendorForm({ v, close, consultants = [] }: { v?: V; close?: () =
           </select>
         </label>
       </div>
-      <label className="field"><L t="Send invoices to" hint="one or more emails, separated by commas" />
-        <input name="apEmail" defaultValue={v?.ap_email} required placeholder="accounts@vendor.com, finance@vendor.com" />
+      <label className="i9-check">
+        <input type="checkbox" name="sendInvoices" checked={invoiced} onChange={(e) => setInvoiced(e.target.checked)} /> We send invoices to this vendor
+        <span className="field-hint"> (untick if they pay from their own portal or work order)</span>
+      </label>
+      <label className="field"><L t={invoiced ? "Send invoices to" : "Vendor email"} hint={invoiced ? "one or more emails, separated by commas" : "optional"} />
+        <input name="apEmail" defaultValue={v?.ap_email} required={invoiced} placeholder="accounts@vendor.com, finance@vendor.com" />
       </label>
       <div className="form-grid">
         <label className="field"><L t="CC" hint="optional" /><input name="ccEmails" defaultValue={v?.cc_emails ?? ""} /></label>
         <label className="field"><L t="Expected payment within (days)" /><input name="terms" type="number" min={0} max={180} defaultValue={v?.payment_terms_days ?? 30} /></label>
       </div>
       <label className="field"><L t="Billing address" /><textarea name="address" defaultValue={v?.address ?? ""} rows={3} style={{ minHeight: 84 }} placeholder={"16803 Dallas Parkway, Suite 300\nAddison, TX 75001"} /></label>
-      <label className="i9-check"><input type="checkbox" name="attach" defaultChecked={v?.attach_timesheets ?? true} /> Attach the approved timesheets to invoice emails</label>
+      {invoiced && <label className="i9-check"><input type="checkbox" name="attach" defaultChecked={v?.attach_timesheets ?? true} /> Attach the approved timesheets to invoice emails</label>}
       {!isNew && <label className="i9-check"><input type="checkbox" name="active" defaultChecked={v?.active ?? true} /> Active</label>}
 
       {isNew && (
@@ -76,7 +82,7 @@ export function VendorForm({ v, close, consultants = [] }: { v?: V; close?: () =
               {consultants.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
-          <RateFields />
+          <RateFields invoiced={invoiced} />
         </>
       )}
 
@@ -90,7 +96,7 @@ export function VendorForm({ v, close, consultants = [] }: { v?: V; close?: () =
 }
 
 /** Add a consultant to a vendor (or edit their rates). */
-export function AssignForm({ vendorId, people, current, close }: { vendorId: string; people: Person[]; current?: Assigned; close?: () => void }) {
+export function AssignForm({ vendorId, people, current, close, invoiced = true }: { vendorId: string; people: Person[]; current?: Assigned; close?: () => void; invoiced?: boolean }) {
   const [s, action, pending] = useActionState(assignConsultant, {} as ActionState);
   useCloseOnSuccess(s, close);
   return (
@@ -106,7 +112,7 @@ export function AssignForm({ vendorId, people, current, close }: { vendorId: str
           </select>
         </label>
       )}
-      <RateFields current={current} />
+      <RateFields current={current} invoiced={invoiced} />
       <div className="form-grid">
         <label className="field"><L t="Client manager" hint="optional" /><input name="managerName" defaultValue={current?.client_manager_name ?? ""} /></label>
         <label className="field"><L t="Client manager email" hint="optional" /><input name="managerEmail" type="email" defaultValue={current?.client_manager_email ?? ""} /></label>
@@ -146,16 +152,17 @@ export function VendorActions({ v }: { v: V & { id: string; name: string } }) {
   );
 }
 
-export function AddConsultant({ vendorId, vendorName, people }: { vendorId: string; vendorName: string; people: Person[] }) {
+export function AddConsultant({ vendorId, vendorName, people, invoiced = true }: { vendorId: string; vendorName: string; people: Person[]; invoiced?: boolean }) {
   return (
     <ModalButton label={<><span aria-hidden="true">＋</span> Add consultant</>} title={`Add a consultant to ${vendorName}`} className="btn btn-outline hr-btn-sm hr-add-row" wide>
-      {(close) => <AssignForm vendorId={vendorId} people={people} close={close} />}
+      {(close) => <AssignForm vendorId={vendorId} people={people} close={close} invoiced={invoiced} />}
     </ModalButton>
   );
 }
 
-export function ConsultantRow({ vendorId, c }: { vendorId: string; c: Assigned }) {
-  const margin = c.pay_rate != null && c.bill_rate != null ? Number(c.bill_rate) - Number(c.pay_rate) : null;
+export function ConsultantRow({ vendorId, c, invoiced = true }: { vendorId: string; c: Assigned; invoiced?: boolean }) {
+  const flat = c.monthly_pay != null && Number(c.monthly_pay) > 0;
+  const margin = !flat && c.pay_rate != null && c.bill_rate != null ? Number(c.bill_rate) - Number(c.pay_rate) : null;
   return (
     <tr>
       <td>
@@ -163,12 +170,12 @@ export function ConsultantRow({ vendorId, c }: { vendorId: string; c: Assigned }
         <div className="muted i9-small">{[c.po_number ? `PO ${c.po_number}` : "", c.payment_terms_days != null ? `Net ${c.payment_terms_days}` : ""].filter(Boolean).join(" · ")}</div>
       </td>
       <td>{c.client_name ?? <span className="muted">—</span>}</td>
-      <td className="i9-num">{money(c.pay_rate)}</td>
+      <td className="i9-num">{flat ? <span title="Flat monthly pay">{money(c.monthly_pay)}/mo</span> : money(c.pay_rate)}</td>
       <td className="i9-num">{money(c.bill_rate)}</td>
       <td className="i9-num">{margin == null ? "—" : <span style={{ color: margin < 0 ? "#b91c1c" : "#15803d" }}>{money(margin)}</span>}</td>
       <td className="hr-td-actions">
         <ModalButton label="Edit" title={`Rates for ${c.name}`} className="hr-link" wide>
-          {(close) => <AssignForm vendorId={vendorId} people={[]} current={c} close={close} />}
+          {(close) => <AssignForm vendorId={vendorId} people={[]} current={c} close={close} invoiced={invoiced} />}
         </ModalButton>
         <ConfirmAction
           action={unassignConsultant}

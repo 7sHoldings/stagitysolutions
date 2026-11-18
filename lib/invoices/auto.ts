@@ -15,14 +15,14 @@ export async function autoSendInvoices(opts: { force?: boolean } = {}): Promise<
 
   const { data: drafts } = await db()
     .from("stagity_invoices")
-    .select("id, person_id, period_start, period_end, total, stagity_vendors(active)")
+    .select("id, person_id, period_start, period_end, total, stagity_vendors(active, send_invoices)")
     .eq("status", "draft");
   const sent: string[] = [];
   const failed: string[] = [];
   let waiting = 0;
   for (const d of drafts ?? []) {
-    const vendorActive = (d.stagity_vendors as unknown as { active: boolean } | null)?.active;
-    if (!vendorActive || Number(d.total) <= 0) continue;
+    const v = d.stagity_vendors as unknown as { active: boolean; send_invoices: boolean } | null;
+    if (!v?.active || v.send_invoices === false || Number(d.total) <= 0) continue;
     const c = await periodCompleteness(d);
     if (!c.complete) {
       waiting++;

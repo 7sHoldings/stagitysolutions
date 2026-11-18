@@ -23,16 +23,21 @@ export async function saveVendor(_prev: ActionState, formData: FormData): Promis
     attach_timesheets: formData.get("attach") === "on",
     active: id ? formData.get("active") === "on" : true,
     notes: clip(formData.get("notes"), 1000) || null,
+    send_invoices: formData.get("sendInvoices") === "on",
   };
   if (!row.name) return { error: "Enter the vendor name." };
-  if (!row.ap_email || !row.ap_email.split(", ").every(emailOk)) return { error: "Enter the vendor email(s) for invoices, separated by commas." };
+  if (row.send_invoices && !row.ap_email) return { error: "Enter the vendor email(s) for invoices, separated by commas." };
+  if (row.ap_email && !row.ap_email.split(", ").every(emailOk)) return { error: "Check the vendor email(s), separated by commas." };
   if (row.cc_emails && !row.cc_emails.split(", ").every(emailOk)) return { error: "Check the CC emails (comma-separated)." };
   if (!Number.isInteger(row.payment_terms_days) || row.payment_terms_days < 0 || row.payment_terms_days > 180) return { error: "Payment terms must be 0–180 days." };
 
   // Optional first consultant (new vendor only): check before saving anything.
   const personId = id ? "" : clip(formData.get("personId"), 60);
-  if (personId && (!clip(formData.get("payRate"), 12) || !clip(formData.get("billRate"), 12))) {
-    return { error: "Enter the consultant's pay rate and bill rate, or leave the consultant empty." };
+  if (personId && !clip(formData.get("payRate"), 12) && !clip(formData.get("monthlyPay"), 12)) {
+    return { error: "Enter the consultant's pay rate (or flat monthly pay), or leave the consultant empty." };
+  }
+  if (personId && row.send_invoices && !clip(formData.get("billRate"), 12)) {
+    return { error: "Enter the consultant's bill rate, or leave the consultant empty." };
   }
 
   const { data: saved, error } = id
