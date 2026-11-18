@@ -61,7 +61,14 @@ export async function send(
   }
   const signature = extras.signature ?? mailboxName[box];
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.55;color:#0b1220;max-width:560px">
-    ${paragraphs.map((p) => `<p style="margin:0 0 14px">${esc(p)}</p>`).join("")}
+    ${paragraphs
+      .map((p) =>
+        // "## Title" = a small heading; line breaks inside a paragraph are kept (for bullet lists).
+        p.startsWith("## ")
+          ? `<p style="margin:22px 0 8px;font-weight:bold;font-size:16px;color:#0b1220">${esc(p.slice(3))}</p>`
+          : `<p style="margin:0 0 14px">${esc(p).replace(/\n/g, "<br>")}</p>`,
+      )
+      .join("")}
     ${
       button
         ? `<p style="margin:22px 0"><a href="${esc(button.href)}" style="background:#1259d6;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:bold">${esc(button.label)}</a></p>
@@ -69,7 +76,7 @@ export async function send(
         : ""
     }
     <p style="margin-top:22px;color:#5b6577;font-size:13px">${esc(signature)}</p></div>`;
-  const text = paragraphs.join("\n\n") + (button ? `\n\n${button.label}: ${button.href}\n` : "");
+  const text = paragraphs.map((p) => (p.startsWith("## ") ? p.slice(3).toUpperCase() : p)).join("\n\n") + (button ? `\n\n${button.label}: ${button.href}\n` : "");
   try {
     await tr.sendMail({
       from: `"${mailboxName[box]}" <${mailboxAddress(box)}>`,

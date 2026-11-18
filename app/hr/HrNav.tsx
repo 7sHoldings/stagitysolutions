@@ -9,6 +9,7 @@ const tabs = [
   { href: "/hr/invoices", label: "Invoices" },
   { href: "/hr/payroll", label: "Payroll" },
   { href: "/hr/i9", label: "Form I-9" },
+  { href: "/hr/announce", label: "Announcements" },
 ];
 
 export default function HrNav({ active, email }: { active: string; email: string }) {
