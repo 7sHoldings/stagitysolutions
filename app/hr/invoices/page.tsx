@@ -3,6 +3,7 @@ import { db, requireHr } from "@/lib/i9/server";
 import { autoSendEnabled, periodCompleteness } from "@/lib/invoices/server";
 import { addMonths, money, monthEnd, monthLabel, monthStart, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
+import MonthPicker from "../MonthPicker";
 import { refreshDrafts, setAutoSend } from "./actions";
 import { RunAutomationButton, SendButton } from "./forms";
 
@@ -131,11 +132,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
               {monthNotInvoiced ? <> · <strong style={{ color: "#b91c1c" }}>{monthNotInvoiced} not invoiced</strong></> : null}
             </p>
           </div>
-          <div className="hr-month-nav">
-            <Link className="btn btn-outline hr-btn-sm" href={`/hr/invoices?month=${ym(addMonths(month, -1))}`} aria-label="Previous month">←</Link>
-            <span className="hr-month-name">{monthLabel(month)}</span>
-            <Link className="btn btn-outline hr-btn-sm" href={`/hr/invoices?month=${ym(addMonths(month, 1))}`} aria-label="Next month">→</Link>
-          </div>
+          <MonthPicker base="/hr/invoices" month={month} current={today} />
         </div>
         <div className="i9-table-wrap">
           <table className="i9-table">

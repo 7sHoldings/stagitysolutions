@@ -4,6 +4,7 @@ import { addMonths, dayName, deadlineFor, isWeekend, monthEnd, monthLabel, month
 import { TS_BUCKET } from "@/lib/portal/server";
 import { expectedPeriods, missingPeriods, monthOverview } from "@/lib/portal/timesheets";
 import HrNav from "../HrNav";
+import MonthPicker from "../MonthPicker";
 import { RemindAllButton, RemindButton, ReviewQueue, type ReviewItem } from "./forms";
 
 export default async function HrTimesheets({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
@@ -78,11 +79,7 @@ export default async function HrTimesheets({ searchParams }: { searchParams: Pro
             Due <strong>{shortDate(deadline)}</strong> · late accepted until payroll on <strong>{shortDate(payDateFor(month))}</strong>
           </p>
         </div>
-        <div className="hr-month-nav">
-          <Link className="btn btn-outline hr-btn-sm" href={`/hr/timesheets?month=${ym(addMonths(month, -1))}`} aria-label="Previous month">←</Link>
-          <span className="hr-month-name">{monthLabel(month)}</span>
-          <Link className="btn btn-outline hr-btn-sm" href={`/hr/timesheets?month=${ym(addMonths(month, 1))}`} aria-label="Next month">→</Link>
-        </div>
+        <MonthPicker base="/hr/timesheets" month={month} current={today} />
       </div>
 
       <ReviewQueue items={queue} />

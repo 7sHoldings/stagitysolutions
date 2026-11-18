@@ -698,3 +698,5 @@ a.inv-cell:hover { outline: 2px solid currentColor; outline-offset: -2px; }
 .inv-status.overdue, .inv-status.missing { background: #fde8e8; color: #991b1b; }
 .inv-status.draft { background: #fff4e5; color: #8a4b00; }
 .inv-status.progress { background: var(--surface); color: var(--muted); }
+.hr-month-select { font: inherit; font-weight: 700; font-size: 15.5px; color: var(--ink); background: #fff; border: 1px solid var(--line-strong); border-radius: 999px; height: 40px; padding: 0 36px 0 16px; cursor: pointer; min-width: 170px; }
+.hr-month-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
