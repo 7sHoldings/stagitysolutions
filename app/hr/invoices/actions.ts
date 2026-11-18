@@ -49,6 +49,16 @@ export async function markPaid(_prev: ActionState, formData: FormData): Promise<
   return { ok: true, message: "Marked as paid." };
 }
 
+/** Undo a payment recorded by mistake: back to "sent, awaiting payment". */
+export async function markUnpaid(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = clip(formData.get("id"), 60);
+  await db().from("stagity_invoices").update({ status: "sent", paid_at: null }).eq("id", id).eq("status", "paid");
+  await audit(null, `hr:${hr}`, "invoice_unpaid", { invoiceId: id });
+  refresh(id);
+  return { ok: true, message: "Marked as not paid." };
+}
+
 export async function voidInvoice(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
   const id = clip(formData.get("id"), 60);

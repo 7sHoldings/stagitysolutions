@@ -700,3 +700,5 @@ a.inv-cell:hover { outline: 2px solid currentColor; outline-offset: -2px; }
 .inv-status.progress { background: var(--surface); color: var(--muted); }
 .hr-month-select { font: inherit; font-weight: 700; font-size: 15.5px; color: var(--ink); background: #fff; border: 1px solid var(--line-strong); border-radius: 999px; height: 40px; padding: 0 36px 0 16px; cursor: pointer; min-width: 170px; }
 .hr-month-select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inv-paid-btn { background: #16a34a; color: #fff; border: 1px solid #16a34a; }
+.inv-paid-btn:hover { background: #15803d; color: #fff; }

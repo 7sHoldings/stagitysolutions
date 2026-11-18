@@ -5,7 +5,7 @@ import { addMonths, money, monthEnd, monthLabel, monthStart, shortDate, todayCT 
 import HrNav from "../HrNav";
 import MonthPicker from "../MonthPicker";
 import { refreshDrafts, setAutoSend } from "./actions";
-import { RunAutomationButton, SendButton } from "./forms";
+import { MarkPaidButton, RunAutomationButton, SendButton } from "./forms";
 
 type Row = {
   id: string; number: string; status: string; period_start: string; period_end: string; total: number; regular_hours: number;
@@ -159,7 +159,12 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
                           {status === "draft" && <SendButton id={draft.id} label="Send" vendor={draft.stagity_vendors.name} total={money(Number(draft.total))} />}
                         </div>
                       ) : inv ? (
-                        <Link className="btn btn-outline hr-btn-xs" href={`/hr/invoices/${inv.id}`}>Open</Link>
+                        <div className="btn-row" style={{ justifyContent: "flex-end" }}>
+                          {done.filter((r) => r.status === "sent").map((r) => (
+                            <MarkPaidButton key={r.id} id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={today} />
+                          ))}
+                          <Link className="btn btn-outline hr-btn-xs" href={`/hr/invoices/${inv.id}`}>Open</Link>
+                        </div>
                       ) : null}
                     </td>
                   </tr>
@@ -206,9 +211,10 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
       {/* Sent */}
       <div className="hr-panel">
         <h2 className="i9-h3">Sent · awaiting payment</h2>
+        <p className="muted i9-small">When a vendor pays, click <strong>Mark paid</strong> and enter the date the money arrived.</p>
         <div className="i9-table-wrap">
           <table className="i9-table">
-            <thead><tr><th>Invoice</th><th>Consultant</th><th>Month</th><th className="i9-num">Amount</th><th>Sent</th><th>Expected by</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Consultant</th><th>Month</th><th className="i9-num">Amount</th><th>Sent</th><th>Expected by</th><th></th></tr></thead>
             <tbody>
               {sent.map((r) => (
                 <tr key={r.id}>
@@ -218,9 +224,10 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
                   <td className="i9-num"><strong>{money(Number(r.total))}</strong></td>
                   <td>{r.sent_at ? shortDate(todayCT(new Date(r.sent_at))) : "—"}</td>
                   <td>{r.due_date && r.due_date < today ? <span className="i9-dot late">overdue · {shortDate(r.due_date)}</span> : r.due_date ? shortDate(r.due_date) : "—"}</td>
+                  <td className="hr-td-actions"><MarkPaidButton id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={today} /></td>
                 </tr>
               ))}
-              {!sent.length && <tr><td colSpan={6} className="muted">Nothing awaiting payment.</td></tr>}
+              {!sent.length && <tr><td colSpan={7} className="muted">Nothing awaiting payment.</td></tr>}
             </tbody>
           </table>
         </div>

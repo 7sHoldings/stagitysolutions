@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
-import { markPaid, runAutomationNow, sendInvoice, updateDraft, voidInvoice } from "./actions";
+import { useActionState, useEffect, useState } from "react";
+import { markPaid, markUnpaid, runAutomationNow, sendInvoice, updateDraft, voidInvoice } from "./actions";
+import { Modal } from "../Modal";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 
@@ -45,6 +46,42 @@ export function PaidForm({ id, today }: { id: string; today: string }) {
       <label className="field" style={{ maxWidth: 240 }}>Payment received on<input type="date" name="paidOn" defaultValue={today} /></label>
       <Status s={s} />
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Mark as paid"}</button>
+    </form>
+  );
+}
+
+/** "Mark paid" button that asks for the date the payment arrived. */
+export function MarkPaidButton({ id, number, amount, vendor, today }: { id: string; number: string; amount: string; vendor: string; today: string }) {
+  const [open, setOpen] = useState(false);
+  const [s, action, pending] = useActionState(markPaid, {} as ActionState);
+  useEffect(() => { if (s.ok) setOpen(false); }, [s]);
+  if (s.ok) return <span className="hr-sent">✓ Paid</span>;
+  return (
+    <>
+      <button type="button" className="btn hr-btn-xs inv-paid-btn" onClick={() => setOpen(true)}>Mark paid</button>
+      <Modal open={open} onClose={() => setOpen(false)} title="Record payment">
+        <form action={action} className="i9-stack" style={{ gap: 16 }}>
+          <input type="hidden" name="id" value={id} />
+          <p className="text">Did <strong>{vendor}</strong> pay invoice <strong>#{number}</strong> for <strong>{amount}</strong>?</p>
+          <label className="field" style={{ maxWidth: 260 }}>Payment received on<input type="date" name="paidOn" defaultValue={today} max={today} required /></label>
+          {s.error && <p className="form-status err">{s.error}</p>}
+          <div className="hr-modal-actions">
+            <button type="button" className="btn btn-outline hr-btn-sm" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn btn-primary hr-btn-sm" disabled={pending}>{pending ? "Saving…" : "Yes, mark as paid"}</button>
+          </div>
+        </form>
+      </Modal>
+    </>
+  );
+}
+
+export function UnpaidButton({ id }: { id: string }) {
+  const [s, action, pending] = useActionState(markUnpaid, {} as ActionState);
+  return (
+    <form action={action} className="i9-stack" style={{ gap: 6 }}>
+      <input type="hidden" name="id" value={id} />
+      <button className="btn btn-outline hr-btn-sm" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Marked by mistake? Set back to unpaid"}</button>
+      <Status s={s} />
     </form>
   );
 }

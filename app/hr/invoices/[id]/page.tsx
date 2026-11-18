@@ -5,7 +5,7 @@ import { periodCompleteness } from "@/lib/invoices/server";
 import { loadInvoice } from "@/lib/invoices/send";
 import { money, sheetLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
-import { DraftEditForm, PaidForm, SendButton, VoidForm } from "../forms";
+import { DraftEditForm, PaidForm, SendButton, UnpaidButton, VoidForm } from "../forms";
 
 const label: Record<string, string> = { draft: "Draft", sent: "Sent", paid: "Paid", void: "Void" };
 const cls: Record<string, string> = { draft: "s-section1_complete", sent: "s-everify_submitted", paid: "s-closed", void: "s-cancelled" };
@@ -82,6 +82,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             Sending assigns the invoice number and emails {vendor.ap_email}{vendor.cc_emails ? ` (cc ${vendor.cc_emails})` : ""} the PDF{vendor.attach_timesheets ? " and the approved timesheets" : ""}. You get a copy.
           </p>
           <SendButton id={id} vendor={vendor.name} total={money(Number(inv.total))} />
+        </div>
+      )}
+      {inv.status === "paid" && (
+        <div className="form-card">
+          <h2 className="i9-h3">Paid{inv.paid_at ? ` on ${inv.paid_at}` : ""}</h2>
+          <UnpaidButton id={id} />
         </div>
       )}
       {inv.status === "sent" && (
