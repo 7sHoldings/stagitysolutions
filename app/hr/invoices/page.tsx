@@ -4,7 +4,7 @@ import { autoSendEnabled, periodCompleteness } from "@/lib/invoices/server";
 import { money, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
 import { refreshDrafts, setAutoSend } from "./actions";
-import { SendButton } from "./forms";
+import { RunAutomationButton, SendButton } from "./forms";
 
 type Row = {
   id: string; number: string; status: string; period_start: string; period_end: string; total: number; regular_hours: number;
@@ -51,9 +51,12 @@ export default async function Invoices() {
       <div className="hero-row" style={{ alignItems: "flex-end" }}>
         <div>
           <h1 className="h2">Vendor invoices</h1>
-          <p className="muted">Approving a timesheet adds its hours to a draft invoice. Invoices are emailed to the vendor from {process.env.SMTP_USER ?? "your HR email"} with the PDF and the approved timesheets.</p>
+          <p className="muted">Approving a timesheet adds its hours to a draft invoice. Invoices are emailed to the vendor from accounts@stagitysolutions.com with the PDF and the approved timesheets. An invoice is sent only once; the automation skips anything already sent.</p>
         </div>
-        <form action={refreshDrafts}><button className="btn btn-outline">Refresh drafts</button></form>
+        <div className="btn-row" style={{ alignItems: "flex-start" }}>
+          <form action={refreshDrafts}><button className="btn btn-outline hr-btn-sm">Refresh drafts</button></form>
+          <RunAutomationButton />
+        </div>
       </div>
 
       <div className={`form-status ${auto ? "ok" : ""}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", background: auto ? undefined : "var(--surface)" }}>

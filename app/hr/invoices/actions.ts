@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { audit, db, requireHr } from "@/lib/i9/server";
 import { recomputeDraft, syncDraftInvoices } from "@/lib/invoices/server";
 import { approveAndSend } from "@/lib/invoices/send";
+import { autoSendInvoices } from "@/lib/invoices/auto";
 import { todayCT } from "@/lib/portal/dates";
 import type { ActionState } from "../actions";
 
@@ -73,6 +74,22 @@ export async function refreshDrafts(): Promise<void> {
   for (const d of drafts ?? []) await recomputeDraft(d.id);
   await audit(null, `hr:${hr}`, "invoice_drafts_refreshed");
   refresh();
+}
+
+/**
+ * Runs the same check the morning automation does, right now: every draft whose period is over and
+ * fully approved is sent. Invoices already sent are never sent again (only drafts are considered).
+ */
+export async function runAutomationNow(_prev: ActionState): Promise<ActionState> {
+  const hr = await requireHr();
+  const r = await autoSendInvoices({ force: true });
+  await audit(null, `hr:${hr}`, "invoice_automation_run", { sent: r.sent.length, failed: r.failed.length, waiting: r.waiting });
+  refresh();
+  if (r.failed.length) return { error: `Sent ${r.sent.length}. ${r.failed.length} couldn't be sent: ${r.failed.join("; ")}` };
+  if (!r.sent.length) {
+    return { ok: true, message: r.waiting ? `Nothing sent: ${r.waiting} draft${r.waiting === 1 ? " is" : "s are"} still waiting for approved timesheets or the end of the period.` : "Nothing to send right now." };
+  }
+  return { ok: true, message: r.sent.join(" ") };
 }
 
 export async function setAutoSend(formData: FormData): Promise<void> {

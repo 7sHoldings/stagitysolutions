@@ -8,8 +8,8 @@ export function SignInForm() {
   const [s, action, pending] = useActionState(signIn, {} as FormState);
   return (
     <form action={action} className="form-card">
-      <label className="field">Email<input name="email" type="email" autoComplete="username" required /></label>
-      <label className="field">Password<PasswordInput name="password" autoComplete="current-password" required /></label>
+      <label className="field">Email<input id="employee-email" name="email" type="email" autoComplete="section-employee username" required /></label>
+      <label className="field">Password<PasswordInput id="employee-password" name="password" autoComplete="section-employee current-password" required /></label>
       {s.error && <p className="form-status err" role="alert">{s.error}</p>}
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>
         {pending ? "Signing in…" : "Sign in"}

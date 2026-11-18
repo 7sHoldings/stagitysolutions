@@ -7,10 +7,11 @@ import { approveAndSend } from "./send";
  * Daily: brings all approved hours onto drafts, then sends every draft whose period is over and
  * fully approved (e.g. a consultant's whole August, once every August timesheet is approved).
  */
-export async function autoSendInvoices(): Promise<{ sent: string[]; failed: string[]; waiting: number }> {
+export async function autoSendInvoices(opts: { force?: boolean } = {}): Promise<{ sent: string[]; failed: string[]; waiting: number }> {
   const { data: people } = await db().from("stagity_people").select("id").eq("kind", "consultant").not("vendor_id", "is", null);
   for (const p of people ?? []) await syncDraftInvoices(p.id);
-  if (!(await autoSendEnabled())) return { sent: [], failed: [], waiting: 0 };
+  // `force` = HR clicked "Run automation now", which works even if the daily auto-send is switched off.
+  if (!opts.force && !(await autoSendEnabled())) return { sent: [], failed: [], waiting: 0 };
 
   const { data: drafts } = await db()
     .from("stagity_invoices")

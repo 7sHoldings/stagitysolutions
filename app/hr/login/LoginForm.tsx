@@ -13,9 +13,9 @@ export default function LoginForm() {
 function PasswordForm({ onReset }: { onReset: () => void }) {
   const [s, action, pending] = useActionState(signInWithPassword, {} as PasswordState);
   return (
-    <form action={action} className="form-card">
-      <label className="field">Admin email<input name="email" type="email" autoComplete="username" required placeholder="hr@stagitysolutions.com" /></label>
-      <label className="field">Password<PasswordInput name="password" autoComplete="current-password" required /></label>
+    <form action={action} className="form-card" id="admin-login" name="admin-login">
+      <label className="field">Admin email<input id="admin-email" name="email" type="email" autoComplete="section-admin username" required placeholder="hr@stagitysolutions.com" /></label>
+      <label className="field">Password<PasswordInput id="admin-password" name="password" autoComplete="section-admin current-password" required /></label>
       {s.error && <p className="form-status err" role="alert">{s.error}</p>}
       <button className="btn btn-primary" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Signing in…" : "Sign in"}</button>
       <p className="i9-small">

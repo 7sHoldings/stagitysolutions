@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { markPaid, sendInvoice, updateDraft, voidInvoice } from "./actions";
+import { markPaid, runAutomationNow, sendInvoice, updateDraft, voidInvoice } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 
@@ -57,6 +57,18 @@ export function VoidForm({ id }: { id: string }) {
       <label className="field">Reason<input name="reason" placeholder="e.g. wrong hours, will reissue" /></label>
       <Status s={s} />
       <button className="btn btn-outline" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Voiding…" : "Void invoice"}</button>
+    </form>
+  );
+}
+
+/** Runs the invoice automation now (same as the morning run). Already-sent invoices are never re-sent. */
+export function RunAutomationButton() {
+  const [s, action, pending] = useActionState(runAutomationNow, {} as ActionState);
+  return (
+    <form action={action} className="i9-stack" style={{ gap: 6, alignItems: "flex-end" }}>
+      <button className="btn btn-primary hr-btn-sm" disabled={pending}>{pending ? "Checking…" : "Run automation now"}</button>
+      {s.message && <span className="hr-sent" style={{ maxWidth: 360, textAlign: "right" }}>✓ {s.message}</span>}
+      {s.error && <span className="i9-small" style={{ color: "#b91c1c", maxWidth: 360, textAlign: "right" }}>{s.error}</span>}
     </form>
   );
 }
