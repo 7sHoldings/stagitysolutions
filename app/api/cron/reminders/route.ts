@@ -183,6 +183,7 @@ export async function GET(req: Request) {
       .eq("active", true)
       .or("must_change_password.eq.true,profile_completed_at.is.null")
       .not("email", "is", null)
+      .not("password_hash", "is", null) // never sent a login yet → nothing to remind about
       .gte("signup_due", today)
       .lt("created_at", `${today}T06:00:00Z`); // not on the day they were registered (they just got the welcome email)
     for (const p of invited ?? []) {

@@ -4,16 +4,17 @@ import { money, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
 import { ConfirmAction } from "../Modal";
 import { deletePerson } from "./actions";
-import { RegisterButton } from "./forms";
+import { RegisterButton, SendLoginsButton } from "./forms";
 
 export default async function People() {
   const hr = await requireHr();
   const { data: people } = await db()
     .from("stagity_people")
-    .select("id, first_name, last_name, email, kind, active, client_name, pay_rate, bill_rate, must_change_password, profile_completed_at, monthly_pay, signup_due, last_login_at, stagity_vendors(name)")
+    .select("id, first_name, last_name, email, kind, active, client_name, pay_rate, bill_rate, must_change_password, password_hash, profile_completed_at, monthly_pay, signup_due, last_login_at, stagity_vendors(name)")
     .order("last_name");
   const today = todayCT();
   const withLogin = (people ?? []).filter((p) => p.active && p.email);
+  const noLoginYet = withLogin.filter((p) => !p.password_hash);
   const notSignedUp = withLogin.filter((p) => p.must_change_password || !p.profile_completed_at);
   return (
     <section className="container hr-page">
@@ -25,6 +26,13 @@ export default async function People() {
         </div>
         <RegisterButton />
       </div>
+
+      {noLoginYet.length > 0 && (
+        <div className="hr-notice" style={{ marginBottom: 16, display: "grid", gap: 10 }}>
+          <span><strong>{noLoginYet.length} {noLoginYet.length === 1 ? "person hasn't" : "people haven't"} been sent a login yet:</strong> {noLoginYet.map((p) => `${p.first_name} ${p.last_name}`).join(", ")}.</span>
+          <SendLoginsButton count={noLoginYet.length} />
+        </div>
+      )}
 
       {withLogin.length > 0 && (
         <div className={notSignedUp.length ? "hr-notice" : "ack-ok"} style={{ marginBottom: 16 }}>

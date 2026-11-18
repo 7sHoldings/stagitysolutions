@@ -219,6 +219,38 @@ export async function resetPassword(_prev: ActionState, formData: FormData): Pro
   };
 }
 
+/**
+ * Emails a login (temporary password) to everyone who has an email but never got one
+ * (e.g. people added in bulk). Each gets the standard welcome email from hr@.
+ */
+export async function sendPendingLogins(_prev: ActionState): Promise<ActionState> {
+  const hr = await requireHr();
+  const { data: people } = await db()
+    .from("stagity_people")
+    .select("id, first_name, email, kind, signup_due")
+    .eq("active", true)
+    .not("email", "is", null)
+    .is("password_hash", null);
+  if (!people?.length) return { ok: true, message: "Everyone already has a login." };
+  const sent: string[] = [];
+  const failed: string[] = [];
+  const week = addDays(todayCT(), 7);
+  for (const p of people) {
+    const pw = await issueTempPassword(p.id);
+    if (!p.signup_due || p.signup_due < week) await db().from("stagity_people").update({ signup_due: week }).eq("id", p.id);
+    const ok = await sendWelcome(p.email!, p.first_name, pw, `${siteOrigin()}/portal/login`, p.kind === "consultant" ? ["submit your weekly timesheets"] : []);
+    if (ok) sent.push(p.first_name);
+    else {
+      failed.push(p.first_name);
+      await db().from("stagity_people").update({ password_hash: null }).eq("id", p.id); // so "Send login emails" can retry
+    }
+    await audit(null, `hr:${hr}`, "login_sent", { personId: p.id, ok });
+  }
+  revalidatePath("/hr/people");
+  if (failed.length) return { error: `Sent to ${sent.join(", ") || "nobody"}. Couldn't email ${failed.join(", ")}; check the email settings and try again.` };
+  return { ok: true, message: `Login emails sent to ${sent.length}: ${sent.join(", ")}.` };
+}
+
 /** Changes the date until which daily "please set up your account" reminders are sent. */
 export async function setSignupDue(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();

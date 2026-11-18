@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { deletePerson, registerPerson, resetPassword, setPay, setSignupDue, startI9, updatePerson } from "./actions";
+import { deletePerson, registerPerson, resetPassword, sendPendingLogins, setPay, setSignupDue, startI9, updatePerson } from "./actions";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
 import { ConfirmAction, ModalButton } from "../Modal";
@@ -156,6 +156,17 @@ export function SignupDueForm({ id, due }: { id: string; due: string }) {
       <label className="field" style={{ maxWidth: 260 }}>Remind them daily until<input type="date" name="signupDue" defaultValue={due} /></label>
       <Status s={s} />
       <button className="btn btn-outline hr-btn-sm" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Saving…" : "Save date"}</button>
+    </form>
+  );
+}
+
+/** One tap: send the welcome/login email to everyone added without one yet. */
+export function SendLoginsButton({ count }: { count: number }) {
+  const [s, action, pending] = useActionState(sendPendingLogins, {} as ActionState);
+  return (
+    <form action={action} className="i9-stack" style={{ gap: 8 }}>
+      {!s.ok && <button className="btn btn-primary hr-btn-sm" disabled={pending} style={{ alignSelf: "flex-start" }}>{pending ? "Sending…" : `Send login emails to ${count}`}</button>}
+      <Status s={s} />
     </form>
   );
 }
