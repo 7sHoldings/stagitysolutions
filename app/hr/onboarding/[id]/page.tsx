@@ -60,7 +60,7 @@ export default async function PersonOnboarding({ params }: { params: Promise<{ i
         <div className="hr-detail-actions">
           <span className={`i9-badge ${s.ob.completed_at ? "s-closed" : "s-section1_complete"}`}>{s.ob.completed_at ? "Complete" : "In progress"}</span>
           <a className="btn btn-primary hr-btn-sm" href={`/hr/onboarding/${id}/pdf?form=all`} target="_blank" rel="noreferrer">Download forms (PDF)</a>
-          {driveConfigured() && <CopyToDriveButton personId={id} />}
+          {(await driveConfigured()) && <CopyToDriveButton personId={id} />}
         </div>
       </div>
       {s.ob.returned_note && !s.ob.completed_at && <p className="ack-warn"><strong>Sent back:</strong> {s.ob.returned_note}</p>}

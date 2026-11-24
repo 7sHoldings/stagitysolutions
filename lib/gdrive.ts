@@ -1,14 +1,17 @@
 import "server-only";
 import { createSign } from "node:crypto";
+import { db, decryptJson, encryptJson } from "@/lib/i9/server";
 
 /**
- * Copies onboarding files to Google Drive (one folder per employee) using a Google Cloud service account.
+ * Copies onboarding files to Google Drive (one folder per employee).
  *
- * Setup (once): create a service account, enable the Drive API, add the service account as a
- * "Content manager" of a Shared Drive folder, then set in Vercel:
- *   GOOGLE_SERVICE_ACCOUNT_JSON = the whole JSON key file
- *   GOOGLE_DRIVE_FOLDER_ID      = the folder ID from the Drive URL
- * Without these, every call is a no-op (the portal still keeps its own copy).
+ * Two ways to connect (the first one configured wins):
+ *  1. "Connect Google Drive" button (OAuth): HR signs in once with hr@; files go to that account's
+ *     Drive under "Stagity Onboarding". Needs GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET in Vercel;
+ *     the refresh token is stored encrypted in stagity_settings (google_drive_token). Scope: drive.file
+ *     (the portal can only see files it created).
+ *  2. Service account: GOOGLE_SERVICE_ACCOUNT_JSON + GOOGLE_DRIVE_FOLDER_ID (Shared drive).
+ * If neither is set, every call is a no-op (the portal still keeps its own copy).
  */
 type Key = { client_email: string; private_key: string };
 let cached: { token: string; exp: number } | null = null;
@@ -24,14 +27,61 @@ function key(): Key | null {
     return null;
   }
 }
-export const driveConfigured = () => !!key();
+
+export const oauthAvailable = () => !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET);
+
+type OAuthConn = { refreshToken: string; email: string; rootId: string };
+async function oauthConn(): Promise<OAuthConn | null> {
+  if (!oauthAvailable()) return null;
+  const { data } = await db().from("stagity_settings").select("value").eq("key", "google_drive_token").maybeSingle();
+  return data?.value ? decryptJson<OAuthConn>(data.value as string) : null;
+}
+export async function saveOAuthConn(c: OAuthConn, by: string) {
+  await db().from("stagity_settings").upsert({ key: "google_drive_token", value: encryptJson(c), updated_at: new Date().toISOString(), updated_by: by });
+  cached = null;
+  folderCache.clear();
+}
+export async function clearOAuthConn() {
+  await db().from("stagity_settings").delete().eq("key", "google_drive_token");
+  cached = null;
+  folderCache.clear();
+}
+
+/** Who Drive is connected as (or null). */
+export async function driveStatus(): Promise<{ mode: "oauth" | "service"; email: string } | null> {
+  const c = await oauthConn();
+  if (c) return { mode: "oauth", email: c.email };
+  const k = key();
+  return k ? { mode: "service", email: k.client_email } : null;
+}
+export const driveConfigured = async () => !!(await driveStatus());
 
 const b64url = (s: string | Buffer) => Buffer.from(s).toString("base64url");
 
-async function token(): Promise<string | null> {
+/** Exchanges an OAuth refresh token for an access token. */
+export async function refreshAccess(refreshToken: string) {
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: process.env.GOOGLE_OAUTH_CLIENT_ID!, client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET!, refresh_token: refreshToken, grant_type: "refresh_token" }),
+  });
+  if (!res.ok) { console.error("Drive token refresh failed", res.status, await res.text()); return null; }
+  return (await res.json()) as { access_token: string; expires_in: number };
+}
+
+async function token(): Promise<{ token: string; root: string } | null> {
+  const conn = await oauthConn();
+  if (conn) {
+    if (cached && cached.exp > Date.now() + 60_000) return { token: cached.token, root: conn.rootId };
+    const j = await refreshAccess(conn.refreshToken);
+    if (!j) return null;
+    cached = { token: j.access_token, exp: Date.now() + j.expires_in * 1000 };
+    return { token: j.access_token, root: conn.rootId };
+  }
   const k = key();
   if (!k) return null;
-  if (cached && cached.exp > Date.now() + 60_000) return cached.token;
+  const root = process.env.GOOGLE_DRIVE_FOLDER_ID!;
+  if (cached && cached.exp > Date.now() + 60_000) return { token: cached.token, root };
   const now = Math.floor(Date.now() / 1000);
   const head = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const claim = b64url(JSON.stringify({ iss: k.client_email, scope: "https://www.googleapis.com/auth/drive", aud: "https://oauth2.googleapis.com/token", iat: now, exp: now + 3600 }));
@@ -44,7 +94,18 @@ async function token(): Promise<string | null> {
   if (!res.ok) { console.error("Drive auth failed", res.status, await res.text()); return null; }
   const j = (await res.json()) as { access_token: string; expires_in: number };
   cached = { token: j.access_token, exp: Date.now() + j.expires_in * 1000 };
-  return j.access_token;
+  return { token: j.access_token, root };
+}
+
+/** Creates the "Stagity Onboarding" folder in the connected account's My Drive (OAuth mode). */
+export async function createRootFolder(accessToken: string) {
+  const res = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {
+    method: "POST",
+    headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ name: "Stagity Onboarding", mimeType: "application/vnd.google-apps.folder" }),
+  });
+  if (!res.ok) { console.error("Drive root folder failed", res.status, await res.text()); return null; }
+  return ((await res.json()) as { id: string }).id;
 }
 
 const q = (s: string) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
@@ -78,9 +139,10 @@ async function folder(name: string, parent: string, t: string): Promise<string |
  */
 export async function saveToDrive(employeeFolder: string, fileName: string, bytes: Uint8Array, mime: string, subfolder?: string): Promise<boolean> {
   try {
-    const t = await token();
-    const root = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    if (!t || !root) return false;
+    const auth = await token();
+    if (!auth) return false;
+    const t = auth.token;
+    const root = auth.root;
     let parent = await folder(employeeFolder, root, t);
     if (parent && subfolder) parent = await folder(subfolder, parent, t);
     if (!parent) return false;

@@ -11,7 +11,7 @@ async function person(personId: string) {
 
 /** Re-saves the filled forms (Personal Information, W-4, Direct Deposit) to the employee's Drive folder. */
 export async function syncFormsToDrive(personId: string) {
-  if (!driveConfigured()) return;
+  if (!(await driveConfigured())) return;
   const [p, { data: ob }] = await Promise.all([person(personId), db().from("stagity_onboarding").select("personal_enc, w4_enc, deposit_enc").eq("person_id", personId).single()]);
   if (!p || !ob) return;
   const folder = employeeFolderName(p);
@@ -29,7 +29,7 @@ export async function syncFormsToDrive(personId: string) {
 
 /** Copies one stored file (uploaded document or signed PDF) to the employee's Drive folder. */
 export async function syncFileToDrive(personId: string, storagePath: string, fileName: string, subfolder: string) {
-  if (!driveConfigured()) return;
+  if (!(await driveConfigured())) return;
   const p = await person(personId);
   const { data: blob } = await db().storage.from(OB_BUCKET).download(storagePath);
   if (!p || !blob) return;
@@ -41,7 +41,7 @@ export const docFileName = (kind: string, original: string) => `${(FILE_KINDS[ki
 
 /** Everything for one person (used by HR's "Copy to Google Drive" button). */
 export async function syncAllToDrive(personId: string) {
-  if (!driveConfigured()) return { ok: false, count: 0 };
+  if (!(await driveConfigured())) return { ok: false, count: 0 };
   await syncFormsToDrive(personId);
   const [{ data: files }, { data: sigs }] = await Promise.all([
     db().from("stagity_onboarding_files").select("kind, storage_path, original_name").eq("person_id", personId),

@@ -3,14 +3,25 @@ import { db, requireHr } from "@/lib/i9/server";
 import { onboardingSteps } from "@/lib/onboarding/server";
 import { todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
-import { AddTemplateButton, NewHireButton, OfferSettingsForm, StartExistingButton, TemplateToggle } from "./forms";
+import { AddTemplateButton, DisconnectDriveButton, NewHireButton, OfferSettingsForm, StartExistingButton, TemplateToggle } from "./forms";
 import { PLACEHOLDERS, companySigner, offerTemplate } from "@/lib/onboarding/offer";
 import { OB_BUCKET } from "@/lib/onboarding/server";
-import { driveConfigured } from "@/lib/gdrive";
+import { driveStatus, oauthAvailable } from "@/lib/gdrive";
+import { googleRedirectUri } from "@/lib/google-oauth";
 
 const short: Record<string, string> = { details: "Contact", personal: "Personal info", w4: "W-4", deposit: "Deposit", documents: "Documents", i9: "I-9" };
 
-export default async function Onboarding() {
+const driveMsg: Record<string, [boolean, string]> = {
+  connected: [true, "Google Drive connected. New onboarding files will be copied there."],
+  cancelled: [false, "Google sign-in was cancelled."],
+  expired: [false, "That sign-in link expired. Please try again."],
+  norefresh: [false, "Google didn't return a long-term token. Remove \"Stagity Portal\" from myaccount.google.com/permissions and connect again."],
+  noscope: [false, "Please allow access to Google Drive files when Google asks."],
+  failed: [false, "Couldn't connect to Google Drive. Please try again."],
+};
+
+export default async function Onboarding({ searchParams }: { searchParams: Promise<{ drive?: string }> }) {
+  const dm = driveMsg[(await searchParams).drive ?? ""];
   const hr = await requireHr();
   const today = todayCT();
   const [{ data: obs }, { data: people }, { data: templates }] = await Promise.all([
@@ -26,7 +37,8 @@ export default async function Onboarding() {
   const tplOpts = active.map((t) => ({ id: t.id, name: t.title, defaultOn: t.default_for_new }));
   const [tpl, signer] = await Promise.all([offerTemplate(), companySigner()]);
   const sigUrl = signer.imagePath ? (await db().storage.from(OB_BUCKET).createSignedUrl(signer.imagePath, 600)).data?.signedUrl ?? null : null;
-  const drive = driveConfigured();
+  const drive = await driveStatus();
+  const canConnect = oauthAvailable();
 
   return (
     <section className="container hr-page">
@@ -104,18 +116,30 @@ export default async function Onboarding() {
         </div>
       </details>
 
-      <div className={`hr-panel ${drive ? "" : "ob-drive-off"}`}>
-        <h2 className="i9-h3">Google Drive</h2>
+      <div className={`hr-panel ${drive ? "" : "ob-drive-off"}`} id="drive">
+        <div className="hr-title" style={{ marginBottom: 6 }}>
+          <h2 className="i9-h3">Google Drive</h2>
+          {drive ? (
+            <span className="btn-row" style={{ alignItems: "center" }}><span className="i9-badge s-closed">✓ Connected</span>{drive.mode === "oauth" && <DisconnectDriveButton />}</span>
+          ) : canConnect ? (
+            <a className="btn btn-primary hr-btn-sm" href="/api/google/connect">Connect Google Drive</a>
+          ) : null}
+        </div>
+        {dm && <p className={`form-status ${dm[0] ? "ok" : "err"}`}>{dm[1]}</p>}
         {drive ? (
-          <p className="muted i9-small">Connected. Every form, uploaded document and signed PDF is also saved to your Drive, in a folder per employee (&ldquo;Last, First&rdquo; → Forms / Documents / Signed).</p>
+          <p className="muted i9-small">
+            Saving to <strong>{drive.email}</strong>&apos;s Drive{drive.mode === "oauth" ? <>, folder <strong>Stagity Onboarding</strong></> : ""}: one folder per employee (&ldquo;Last, First&rdquo; → Forms / Documents / Signed). Each person&apos;s page has &ldquo;Copy all to Google Drive&rdquo; for anything submitted earlier.
+          </p>
+        ) : canConnect ? (
+          <p className="muted i9-small">Click <strong>Connect Google Drive</strong> and sign in with <strong>hr@stagitysolutions.com</strong>. The portal can only see the files it creates, not the rest of your Drive.</p>
         ) : (
           <>
-            <p className="muted i9-small">Not connected yet. Everything is saved in the portal now; once Drive is connected, copies also go to a folder per employee. One-time setup (about 10 minutes):</p>
+            <p className="muted i9-small">Not connected yet. One-time setup in Google Cloud (project &ldquo;Stagity Portal&rdquo;), about 5 minutes:</p>
             <ol className="i9-small" style={{ margin: "6px 0 0 18px", lineHeight: 1.7 }}>
-              <li>In Google Drive (your Workspace), create a <strong>Shared drive</strong>, e.g. &ldquo;Employee Onboarding&rdquo;.</li>
-              <li>At console.cloud.google.com: create a project → enable the <strong>Google Drive API</strong> → create a <strong>service account</strong> → Keys → Add key → JSON (a file downloads).</li>
-              <li>In the Shared drive: Manage members → add the service account&apos;s email as <strong>Content manager</strong>.</li>
-              <li>In Vercel → Settings → Environment Variables add <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> (paste the whole JSON file) and <code>GOOGLE_DRIVE_FOLDER_ID</code> (the ID at the end of the Shared drive&apos;s URL). Redeploy.</li>
+              <li><strong>APIs &amp; Services → OAuth consent screen</strong> (Google Auth Platform): Get started → App name <em>Stagity Portal</em>, support email hr@ → Audience <strong>Internal</strong> → contact email → Create.</li>
+              <li><strong>Clients → Create client</strong>: type <strong>Web application</strong>, name <em>Stagity Portal</em>, Authorised redirect URI: <code>{googleRedirectUri()}</code> → Create.</li>
+              <li>Copy the <strong>Client ID</strong> and <strong>Client secret</strong> into Vercel → Settings → Environment Variables as <code>GOOGLE_OAUTH_CLIENT_ID</code> and <code>GOOGLE_OAUTH_CLIENT_SECRET</code> (Sensitive), then redeploy.</li>
+              <li>Come back here and click <strong>Connect Google Drive</strong>.</li>
             </ol>
           </>
         )}

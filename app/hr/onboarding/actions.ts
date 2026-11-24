@@ -9,7 +9,7 @@ import { DEFAULT_OFFER_TEMPLATE, buildOfferPdf, companySignatureImage, companySi
 import { stampSignedPdf } from "@/lib/onboarding/pdf";
 import { issueTempPassword } from "@/lib/portal/accounts";
 import { syncAllToDrive, syncFileToDrive } from "@/lib/onboarding/sync";
-import { driveConfigured } from "@/lib/gdrive";
+import { clearOAuthConn, driveConfigured } from "@/lib/gdrive";
 import { startFor } from "@/lib/onboarding/start";
 import { addDays, todayCT } from "@/lib/portal/dates";
 import type { ActionState } from "../actions";
@@ -358,8 +358,16 @@ export async function saveSignatureImage(path: string) {
 export async function copyToDrive(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const hr = await requireHr();
   const personId = clip(formData.get("personId"), 60);
-  if (!driveConfigured()) return { error: "Google Drive isn't connected yet (see the setup steps on the Onboarding page)." };
+  if (!(await driveConfigured())) return { error: "Google Drive isn't connected yet (see the setup steps on the Onboarding page)." };
   const r = await syncAllToDrive(personId);
   await audit(null, `hr:${hr}`, "onboarding_copied_to_drive", { personId });
   return r.ok ? { ok: true, message: "Copied to Google Drive." } : { error: "Couldn't copy to Google Drive." };
+}
+
+export async function disconnectDrive(_prev: ActionState): Promise<ActionState> {
+  const hr = await requireHr();
+  await clearOAuthConn();
+  await audit(null, `hr:${hr}`, "google_drive_disconnected");
+  refresh();
+  return { ok: true, message: "Disconnected." };
 }

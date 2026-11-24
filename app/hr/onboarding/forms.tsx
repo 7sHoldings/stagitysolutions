@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  copyToDrive, countersignOffer, getSignatureUploadUrl, newHire, saveOffer, saveOfferSettings, saveSignatureImage,
+  copyToDrive, countersignOffer, disconnectDrive, getSignatureUploadUrl, newHire, saveOffer, saveOfferSettings, saveSignatureImage,
   addPersonDoc, cancelSignature, getPersonDocUploadUrl, getTemplateUploadUrl, requestTemplateFor, resendInvite, returnItems, saveTemplate, setDue, setTemplate, startOnboarding,
 } from "./actions";
 import { Status } from "../forms";
@@ -361,4 +361,8 @@ export function CopyToDriveButton({ personId }: { personId: string }) {
       <Status s={s} />
     </form>
   );
+}
+
+export function DisconnectDriveButton() {
+  return <ConfirmAction action={disconnectDrive} fields={{}} label="Disconnect" className="hr-link danger" title="Disconnect Google Drive?" message={<>New files will only be saved in the portal. Files already in Drive stay there.</>} confirmLabel="Yes, disconnect" />;
 }
