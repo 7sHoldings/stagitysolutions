@@ -14,7 +14,7 @@ export type Invoice = {
   total: number; po_number: string | null; notes: string | null; issue_date: string | null; due_date: string | null;
   sent_at: string | null; sent_by: string | null; sent_to: string | null; paid_at: string | null; voided_reason: string | null;
   review_requested_at?: string | null;
-  amount_received?: number; adjustment?: number; adjustment_reason?: string | null; short_emailed_at?: string | null;
+  amount_received?: number; adjustment?: number; adjustment_reason?: string | null; short_emailed_at?: string | null; imported?: boolean;
 };
 
 export const isDraftNumber = (n: string) => n.startsWith("DRAFT-");

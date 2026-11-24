@@ -34,9 +34,10 @@ export default async function HrHome() {
     db().from("stagity_payroll_runs").select("id, status").eq("period_month", addMonths(monthStart(today), -1)).maybeSingle(),
     db().from("stagity_invoices").select("id", { count: "exact", head: true }).eq("status", "draft"),
   ]);
-  const { data: unpaid } = await db().from("stagity_invoices").select("total, due_date").eq("status", "sent");
-  const outstanding = (unpaid ?? []).reduce((a, r) => a + Number(r.total), 0);
-  const overdueCount = (unpaid ?? []).filter((r) => r.due_date && r.due_date < today).length;
+  const { data: unpaid } = await db().from("stagity_invoices").select("total, amount_received, adjustment, due_date").eq("status", "sent");
+  const leftOf = (r: { total: number; amount_received: number; adjustment: number }) => Number(r.total) - Number(r.amount_received) - Number(r.adjustment);
+  const outstanding = (unpaid ?? []).reduce((a, r) => a + leftOf(r), 0);
+  const overdueCount = (unpaid ?? []).filter((r) => leftOf(r) > 0 && r.due_date && r.due_date < today).length;
   const missing = overview.consultants.filter((p) => p.active && missingPeriods(p, month, overview.sheet).length > 0).length;
   const payMonth = addMonths(monthStart(today), -1);
 

@@ -3,7 +3,7 @@ import { db, requireHr } from "@/lib/i9/server";
 import { addDays, addMonths, money, monthEnd, monthLabel, monthStart, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
 import MonthPicker from "../MonthPicker";
-import { MarkPaidButton, ShortPayActions } from "../invoices/forms";
+import { EditOldButton, MarkPaidButton, ShortPayActions } from "../invoices/forms";
 import { expectedAmount } from "@/lib/invoices/payments";
 import { periodLabel, shortPaymentLines } from "@/lib/invoices/send";
 import { TermsButton, UndoReceived } from "./forms";
@@ -11,7 +11,7 @@ import { TermsButton, UndoReceived } from "./forms";
 type Row = {
   id: string; number: string; status: "sent" | "paid"; period_start: string; period_end: string; total: number;
   issue_date: string | null; due_date: string | null; paid_at: string | null;
-  amount_received: number; adjustment: number; adjustment_reason: string | null; short_emailed_at: string | null;
+  amount_received: number; adjustment: number; adjustment_reason: string | null; short_emailed_at: string | null; imported: boolean;
   stagity_people: { first_name: string; last_name: string };
   stagity_vendors: { name: string; ap_email: string; cc_emails: string | null; vms_fee_pct: number | null; dispute_days: number | null };
 };
@@ -30,7 +30,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
 
   const { data } = await db()
     .from("stagity_invoices")
-    .select("id, number, status, period_start, period_end, total, issue_date, due_date, paid_at, amount_received, adjustment, adjustment_reason, short_emailed_at, stagity_people(first_name, last_name), stagity_vendors(name, ap_email, cc_emails, vms_fee_pct, dispute_days)")
+    .select("id, number, status, period_start, period_end, total, issue_date, due_date, paid_at, amount_received, adjustment, adjustment_reason, short_emailed_at, imported, stagity_people(first_name, last_name), stagity_vendors(name, ap_email, cc_emails, vms_fee_pct, dispute_days)")
     .in("status", ["sent", "paid"])
     .order("due_date", { ascending: true })
     .limit(2000);
@@ -38,9 +38,11 @@ export default async function Payments({ searchParams }: { searchParams: Promise
 
   // ---- Totals across everything (not just the selected month) ----
   const open = all.filter((r) => r.status === "sent");
-  const overdue = open.filter((r) => r.due_date && r.due_date < today);
+  const noAmount = (r: Row) => r.imported && Number(r.total) <= 0;
+  const overdue = open.filter((r) => !noAmount(r) && r.due_date && r.due_date < today);
+  const toCheck = open.filter(noAmount);
   const shortPaid = open.filter((r) => Number(r.amount_received) > 0);
-  const soon = open.filter((r) => r.due_date && r.due_date >= today && r.due_date <= addDays(today, 30));
+  const soon = open.filter((r) => !noAmount(r) && r.due_date && r.due_date >= today && r.due_date <= addDays(today, 30));
   const { data: monthPays } = await db().from("stagity_invoice_payments").select("amount").gte("received_on", monthStart(today));
   const receivedThisMonthAmt = (monthPays ?? []).reduce((a, p) => a + Number(p.amount), 0);
   // Payments for short-paid invoices (for the email preview).
@@ -83,6 +85,14 @@ export default async function Payments({ searchParams }: { searchParams: Promise
         <div className="pay-sum"><span className="hr-sum-n" style={{ color: "#15803d" }}>{money(receivedThisMonthAmt)}</span><span className="muted i9-small">Received in {monthLabel(monthStart(today))}</span></div>
       </div>
 
+      {toCheck.length > 0 && (
+        <div className="hr-notice" style={{ marginBottom: 16 }}>
+          <strong>{toCheck.length} old invoice{toCheck.length === 1 ? "" : "s"} (Jan–Oct) to check.</strong> For each month: tap <strong>Mark paid</strong> if the vendor paid,
+          or <strong>Enter amount</strong> if it&apos;s still unpaid so it counts as outstanding. Use <strong>Enter amount → Remove this month</strong> if no invoice was sent.{" "}
+          <Link href="/hr/payments?view=open">See all</Link>
+        </div>
+      )}
+
       <div className="hr-panel">
         <div className="inv-month-head">
           <div>
@@ -114,11 +124,11 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                   return (
                     <tr key={r.id} className={r.status === "sent" && late > 0 ? "pay-overdue" : ""}>
                       <td className="pay-who"><strong>{name}</strong><div className="muted i9-small">{r.stagity_vendors.name}</div></td>
-                      <td data-label="Invoice"><Link href={`/hr/invoices/${r.id}`}>#{r.number}</Link><div className="muted i9-small">{monthLabel(r.period_start)} · sent {nice(r.issue_date)}</div></td>
+                      <td data-label="Invoice"><Link href={`/hr/invoices/${r.id}`}>#{r.number}</Link>{r.imported && <span className="pay-old">before portal</span>}<div className="muted i9-small">{monthLabel(r.period_start)} · sent {nice(r.issue_date)}</div></td>
                       <td data-label="Terms">{terms == null ? "—" : r.status === "sent" && r.issue_date ? <TermsButton id={r.id} issueDate={r.issue_date} days={terms} /> : `Net ${terms}`}</td>
                       <td data-label="Expected by">{nice(r.due_date)}</td>
                       <td className="i9-num pay-amt" data-label="Amount">
-                        <strong>{money(Number(r.total))}</strong>
+                        {noAmount(r) ? <span className="muted">—</span> : <strong>{money(Number(r.total))}</strong>}
                         {Number(r.amount_received) > 0 && r.status === "sent" && <div className="i9-small" style={{ color: "#15803d" }}>{money(Number(r.amount_received))} received</div>}
                         {r.stagity_vendors.vms_fee_pct ? <div className="muted i9-small">expect {money(expectedAmount(Number(r.total), r.stagity_vendors.vms_fee_pct))} after {Number(r.stagity_vendors.vms_fee_pct)}% VMS fee</div> : null}
                       </td>
@@ -128,6 +138,8 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                             <span className="i9-badge s-closed">✓ Received {nice(r.paid_at)}{paidLate > 0 ? ` (${paidLate} d late)` : ""}</span>
                             {Number(r.adjustment) > 0 && <div className="muted i9-small">{money(Number(r.adjustment))} less: {r.adjustment_reason}</div>}
                           </>
+                        ) : noAmount(r) ? (
+                          <span className="i9-badge s-cancelled">Mark paid, or enter amount if unpaid</span>
                         ) : Number(r.amount_received) > 0 ? (
                           <>
                             <span className="i9-badge pay-short">Short {money(left(r))}</span>
@@ -153,10 +165,11 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                             })}
                           />
                         ) : r.status === "sent" ? (
-                          <MarkPaidButton id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={today} remaining={expectedAmount(Number(r.total), r.stagity_vendors.vms_fee_pct)} />
+                          <MarkPaidButton id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={noAmount(r) && r.due_date && r.due_date < today ? r.due_date : today} remaining={expectedAmount(Number(r.total), r.stagity_vendors.vms_fee_pct)} noAmount={noAmount(r)} />
                         ) : (
                           <UndoReceived id={r.id} number={r.number} />
                         )}
+                        {r.imported && r.issue_date && <EditOldButton id={r.id} number={r.number} issueDate={r.issue_date} total={Number(r.total)} label={noAmount(r) ? "Enter amount" : "Edit"} />}
                       </td>
                     </tr>
                   );

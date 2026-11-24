@@ -8,7 +8,7 @@ import { CheckNowButton, MarkPaidButton, SendButton } from "./forms";
 
 type Row = {
   id: string; number: string; status: string; period_start: string; period_end: string; total: number; regular_hours: number;
-  overtime_hours: number; due_date: string | null; sent_at: string | null; paid_at: string | null; amount_received: number; person_id: string;
+  overtime_hours: number; due_date: string | null; sent_at: string | null; paid_at: string | null; amount_received: number; imported: boolean; person_id: string;
   stagity_people: { first_name: string; last_name: string; client_name: string | null };
   stagity_vendors: { name: string };
 };
@@ -21,7 +21,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
   const [{ data }, { data: consultants }] = await Promise.all([
     db()
       .from("stagity_invoices")
-      .select("id, number, status, period_start, period_end, total, regular_hours, overtime_hours, due_date, sent_at, paid_at, amount_received, person_id, stagity_people(first_name, last_name, client_name), stagity_vendors(name)")
+      .select("id, number, status, period_start, period_end, total, regular_hours, overtime_hours, due_date, sent_at, paid_at, amount_received, imported, person_id, stagity_people(first_name, last_name, client_name), stagity_vendors(name)")
       .neq("status", "void")
       .order("period_start", { ascending: false })
       .limit(500),
@@ -33,8 +33,9 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
   ]);
   const rows = (data ?? []) as unknown as Row[];
   const drafts = rows.filter((r) => r.status === "draft");
-  const sent = rows.filter((r) => r.status === "sent");
-  const paid = rows.filter((r) => r.status === "paid").slice(0, 30);
+  // Old invoices (before the portal) are tracked on the Payments tab only.
+  const sent = rows.filter((r) => r.status === "sent" && !r.imported);
+  const paid = rows.filter((r) => r.status === "paid" && !r.imported).slice(0, 30);
   const complete = await Promise.all(drafts.map((d) => periodCompleteness(d)));
   const awaiting = sent.reduce((a, r) => a + Number(r.total), 0);
   const overdue = sent.filter((r) => r.due_date && r.due_date < today);

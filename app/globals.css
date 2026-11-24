@@ -782,3 +782,4 @@ a.pay-sum:hover .hr-sum-n { text-decoration: underline; }
   .pay-table tr.pay-overdue { background: #fffafa; }
 }
 .pay-short { background: #fffbeb; color: #b45309; }
+.pay-old { display: inline-block; margin-left: 6px; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: #f3f4f6; color: #6b7280; vertical-align: middle; }

@@ -47,11 +47,18 @@ export async function markPaid(_prev: ActionState, formData: FormData): Promise<
   const hr = await requireHr();
   const id = clip(formData.get("id"), 60);
   const paidOn = clip(formData.get("paidOn"), 10) || todayCT();
-  const amount = round2(Number(clip(formData.get("amount"), 14)));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn) || paidOn > todayCT()) return { error: "Enter the date the money arrived (not in the future)." };
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter the amount received." };
-  const { data: inv } = await db().from("stagity_invoices").select("status, total, amount_received, adjustment").eq("id", id).single();
+  const { data: inv } = await db().from("stagity_invoices").select("status, total, amount_received, adjustment, imported").eq("id", id).single();
   if (!inv || inv.status !== "sent") return { error: "This invoice isn't waiting for payment." };
+  // An old invoice with no amount entered: just mark it paid.
+  if (inv.imported && Number(inv.total) <= 0) {
+    await db().from("stagity_invoices").update({ status: "paid", paid_at: paidOn }).eq("id", id);
+    await audit(null, `hr:${hr}`, "invoice_payment_recorded", { invoiceId: id, paidOn, noAmount: true });
+    refresh(id);
+    return { ok: true, message: "Marked paid." };
+  }
+  const amount = round2(Number(clip(formData.get("amount"), 14)));
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter the amount received." };
   const left = round2(Number(inv.total) - Number(inv.amount_received) - Number(inv.adjustment));
   if (amount > left + 0.005) return { error: `That's more than what's left on this invoice (${left.toFixed(2)}).` };
   await db().from("stagity_invoice_payments").insert({ invoice_id: id, amount, received_on: paidOn, note: clip(formData.get("note"), 300) || null, created_by: hr });
@@ -60,6 +67,50 @@ export async function markPaid(_prev: ActionState, formData: FormData): Promise<
   refresh(id);
   if (r?.done) return { ok: true, message: "Paid in full." };
   return { ok: true, message: `Recorded. ${(left - amount).toFixed(2)} still short.` };
+}
+
+/** Old invoices (sent before the portal): fix the amount, invoice number or invoice date. */
+export async function editImported(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = clip(formData.get("id"), 60);
+  const number = clip(formData.get("number"), 40);
+  const issue = clip(formData.get("issueDate"), 10);
+  const totalRaw = clip(formData.get("total"), 14);
+  const total = totalRaw ? round2(Number(totalRaw)) : 0;
+  if (!number) return { error: "Enter the invoice number." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(issue)) return { error: "Enter the invoice date." };
+  if (!Number.isFinite(total) || total < 0) return { error: "Enter a valid amount." };
+  const { data: inv } = await db()
+    .from("stagity_invoices")
+    .select("imported, status, amount_received, stagity_people(payment_terms_days), stagity_vendors(payment_terms_days)")
+    .eq("id", id)
+    .single();
+  if (!inv?.imported) return { error: "Only old invoices can be edited." };
+  if (total > 0 && Number(inv.amount_received) > total) return { error: "The amount can't be less than what's already been received." };
+  const terms = (inv.stagity_people as unknown as { payment_terms_days: number | null })?.payment_terms_days ?? (inv.stagity_vendors as unknown as { payment_terms_days: number })?.payment_terms_days ?? 30;
+  const { addDays } = await import("@/lib/portal/dates");
+  const { error } = await db()
+    .from("stagity_invoices")
+    .update({ number, issue_date: issue, due_date: addDays(issue, terms), total, sent_at: `${issue}T12:00:00Z` })
+    .eq("id", id);
+  if (error) return { error: error.message.includes("duplicate") ? "Another invoice already has that number." : error.message };
+  if (Number(inv.amount_received) > 0) await settle(id);
+  await audit(null, `hr:${hr}`, "invoice_old_edited", { invoiceId: id, number, issue, total });
+  refresh(id);
+  return { ok: true, message: "Saved." };
+}
+
+/** Removes an old-invoice placeholder that doesn't apply (e.g. the consultant wasn't working that month). */
+export async function removeImported(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const id = clip(formData.get("id"), 60);
+  const { data: inv } = await db().from("stagity_invoices").select("imported, number").eq("id", id).single();
+  if (!inv?.imported) return { error: "Only old invoices can be removed." };
+  await db().from("stagity_invoice_payments").delete().eq("invoice_id", id);
+  await db().from("stagity_invoices").delete().eq("id", id);
+  await audit(null, `hr:${hr}`, "invoice_old_removed", { invoiceId: id, number: inv.number });
+  refresh();
+  return { ok: true, message: "Removed." };
 }
 
 /** Undo: removes every recorded payment and accepted difference, back to "awaiting payment". */

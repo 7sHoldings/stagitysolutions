@@ -6,7 +6,7 @@ import { loadInvoice, periodLabel, shortPaymentLines } from "@/lib/invoices/send
 import { addDays, money, sheetLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
 import BackLink from "../../BackLink";
-import { DraftEditForm, MarkPaidButton, SendButton, ShortPayActions, UnpaidButton, VoidForm } from "../forms";
+import { DraftEditForm, EditOldButton, MarkPaidButton, SendButton, ShortPayActions, UnpaidButton, VoidForm } from "../forms";
 
 const label: Record<string, string> = { draft: "Draft", sent: "Sent", paid: "Paid", void: "Void" };
 const cls: Record<string, string> = { draft: "s-section1_complete", sent: "s-everify_submitted", paid: "s-closed", void: "s-cancelled" };
@@ -48,7 +48,14 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         </div>
         <div className="hr-detail-actions">
           <span className={`i9-badge ${cls[inv.status]}`}>{label[inv.status]}</span>
-          <a className="btn btn-outline hr-btn-sm" href={`/hr/invoices/${id}/pdf`} target="_blank" rel="noreferrer">{draft ? "Preview PDF" : "View PDF"}</a>
+          {inv.imported ? (
+            <>
+              <span className="pay-old">sent before the portal</span>
+              {inv.issue_date && <EditOldButton id={id} number={inv.number} issueDate={inv.issue_date} total={Number(inv.total)} label="Edit amount / number" />}
+            </>
+          ) : (
+            <a className="btn btn-outline hr-btn-sm" href={`/hr/invoices/${id}/pdf`} target="_blank" rel="noreferrer">{draft ? "Preview PDF" : "View PDF"}</a>
+          )}
           {draft && <SendButton id={id} vendor={vendor.name} total={money(Number(inv.total))} to={[vendor.ap_email, vendor.cc_emails].filter(Boolean).join(", ")} />}
         </div>
       </div>
@@ -125,7 +132,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           )}
           <div className="btn-row" style={{ alignItems: "center" }}>
             {inv.status === "sent" && (
-              <MarkPaidButton id={id} number={inv.number} amount={money(Number(inv.total))} vendor={vendor.name} today={todayCT()} remaining={short} label={received > 0 ? "Record another payment" : "Record payment"} />
+              <MarkPaidButton id={id} number={inv.number} amount={money(Number(inv.total))} vendor={vendor.name} today={todayCT()} remaining={short} label={received > 0 ? "Record another payment" : "Record payment"} noAmount={!!inv.imported && Number(inv.total) <= 0} />
             )}
             {inv.status === "sent" && received > 0 && (
               <ShortPayActions
@@ -139,7 +146,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             )}
           </div>
           {payments.length > 0 && <UnpaidButton id={id} />}
-          {inv.status === "sent" && (
+          {inv.status === "sent" && !inv.imported && (
             <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 14, marginTop: 6 }}>
               <p className="muted i9-small" style={{ margin: "0 0 8px" }}>Sent by mistake or with wrong hours?</p>
               <VoidForm id={id} />
