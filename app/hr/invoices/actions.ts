@@ -12,6 +12,8 @@ const clip = (v: FormDataEntryValue | null, max = 500) => String(v ?? "").trim()
 
 function refresh(id?: string) {
   revalidatePath("/hr/invoices");
+  revalidatePath("/hr/payments");
+  revalidatePath("/hr");
   if (id) revalidatePath(`/hr/invoices/${id}`);
 }
 

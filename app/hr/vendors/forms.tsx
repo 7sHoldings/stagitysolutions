@@ -36,7 +36,7 @@ function RateFields({ current, invoiced = true }: { current?: Assigned; invoiced
       <label className="field"><L t="Bill rate ($/h)" hint={invoiced ? "invoice" : "optional, for your records"} /><input name="billRate" type="number" step="0.01" min="0" defaultValue={current?.bill_rate ?? ""} placeholder="e.g. 70" /></label>
       <label className="field"><L t="Client" hint="optional" /><input name="clientName" defaultValue={current?.client_name ?? ""} /></label>
       <label className="field"><L t="PO / reference" hint="optional" /><input name="poNumber" defaultValue={current?.po_number ?? ""} /></label>
-      <label className="field"><L t="Payment terms (days)" hint="empty = vendor default" /><input name="personTerms" type="number" min={0} max={180} defaultValue={current?.payment_terms_days ?? ""} placeholder="e.g. 30" /></label>
+      <label className="field"><L t="Payment terms (days)" hint="empty = vendor's terms" /><input name="personTerms" type="number" min={0} max={180} defaultValue={current?.payment_terms_days ?? ""} placeholder="e.g. 30" /></label>
     </div>
   );
 }
@@ -67,7 +67,7 @@ export function VendorForm({ v, close, consultants = [] }: { v?: V; close?: () =
       </label>
       <div className="form-grid">
         <label className="field"><L t="CC" hint="optional" /><input name="ccEmails" defaultValue={v?.cc_emails ?? ""} /></label>
-        <label className="field"><L t="Expected payment within (days)" /><input name="terms" type="number" min={0} max={180} defaultValue={v?.payment_terms_days ?? 30} /></label>
+        <label className="field"><L t="Payment terms (days after invoice date)" hint="e.g. 45 = Net 45" /><input name="terms" type="number" min={0} max={180} defaultValue={v?.payment_terms_days ?? 30} /></label>
       </div>
       <label className="field"><L t="Billing address" /><textarea name="address" defaultValue={v?.address ?? ""} rows={3} style={{ minHeight: 84 }} placeholder={"16803 Dallas Parkway, Suite 300\nAddison, TX 75001"} /></label>
       {!isNew && <label className="i9-check"><input type="checkbox" name="active" defaultChecked={v?.active ?? true} /> Active</label>}

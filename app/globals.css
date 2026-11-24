@@ -756,3 +756,28 @@ a.inv-cell:hover { outline: 2px solid currentColor; outline-offset: -2px; }
 .hr-detail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .hr-detail-actions .i9-badge { font-size: 14px; padding: 6px 14px; }
 .inv-ready { padding: 14px 16px; border-radius: 12px; background: #eff6ff; color: #1e3a8a; font-size: 14.5px; margin: 0; }
+
+/* Payments tab */
+.pay-sum { display: grid; gap: 4px; text-decoration: none; color: inherit; }
+a.pay-sum:hover .hr-sum-n { text-decoration: underline; }
+.pay-views { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+.pay-views a { padding: 7px 14px; border-radius: 999px; border: 1px solid #d1d5db; font-size: 14px; font-weight: 600; color: #374151; text-decoration: none; background: #fff; }
+.pay-views a.on { background: #0b1220; border-color: #0b1220; color: #fff; }
+.pay-late { background: #fef2f2; color: #b91c1c; }
+.pay-table tr.pay-overdue td { background: #fffafa; }
+.hr-summary > a.pay-sum { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px 20px; display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 640px) { .hr-summary > a.pay-sum { padding: 12px 14px; } }
+@media (max-width: 700px) {
+  .pay-table thead { display: none; }
+  .pay-table, .pay-table tbody { display: block; }
+  .pay-table tr { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .pay-table td { display: block; padding: 0 !important; border: 0 !important; text-align: left !important; background: none !important; }
+  .pay-table td.pay-who { grid-column: 1; }
+  .pay-table td.pay-amt { grid-column: 2; grid-row: 1; text-align: right !important; font-size: 17px; }
+  .pay-table td[data-label]:not(.pay-amt) { grid-column: 1 / -1; display: flex; gap: 8px; font-size: 14px; }
+  .pay-table td[data-label]:not(.pay-amt)::before { content: attr(data-label); min-width: 96px; color: #6b7280; }
+  .pay-table td[data-label="Invoice"] .muted { display: none; }
+  .pay-table td.pay-status { grid-column: 1; align-self: center; }
+  .pay-table td.pay-act { grid-column: 2; justify-self: end; }
+  .pay-table tr.pay-overdue { background: #fffafa; }
+}

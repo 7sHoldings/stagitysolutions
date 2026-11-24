@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, i9Configured, requireHr } from "@/lib/i9/server";
-import { addMonths, deadlineFor, monthLabel, monthStart, payDateFor, todayCT } from "@/lib/portal/dates";
+import { addMonths, money, deadlineFor, monthLabel, monthStart, payDateFor, todayCT } from "@/lib/portal/dates";
 import { missingPeriods, monthOverview } from "@/lib/portal/timesheets";
 import HrNav from "./HrNav";
 
@@ -34,6 +34,9 @@ export default async function HrHome() {
     db().from("stagity_payroll_runs").select("id, status").eq("period_month", addMonths(monthStart(today), -1)).maybeSingle(),
     db().from("stagity_invoices").select("id", { count: "exact", head: true }).eq("status", "draft"),
   ]);
+  const { data: unpaid } = await db().from("stagity_invoices").select("total, due_date").eq("status", "sent");
+  const outstanding = (unpaid ?? []).reduce((a, r) => a + Number(r.total), 0);
+  const overdueCount = (unpaid ?? []).filter((r) => r.due_date && r.due_date < today).length;
   const missing = overview.consultants.filter((p) => p.active && missingPeriods(p, month, overview.sheet).length > 0).length;
   const payMonth = addMonths(monthStart(today), -1);
 
@@ -44,6 +47,7 @@ export default async function HrHome() {
       <div className="i9-tiles">
         <Tile n={tsReview ?? 0} label="Timesheets to review" href="/hr/timesheets" />
         <Tile n={invDrafts ?? 0} label="Vendor invoices ready to send" href="/hr/invoices" />
+        <Tile n={money(outstanding)} label={`Not yet received from vendors${overdueCount ? ` (${overdueCount} overdue)` : ""}`} href="/hr/payments?view=open" />
         <Tile n={missing} label={`Consultants missing ${monthLabel(month)} timesheets (due ${deadlineFor(month)}, payroll ${payDateFor(month)})`} href={`/hr/timesheets?month=${month.slice(0, 7)}`} />
         <Tile n={i9Review ?? 0} label="Form I-9s needing HR action" href="/hr/i9" />
         <Tile n={i9Waiting ?? 0} label="Form I-9s waiting for the employee" href="/hr/i9" />
