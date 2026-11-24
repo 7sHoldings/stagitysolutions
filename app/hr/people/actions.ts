@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { audit, db, I9_BUCKET, requireHr, siteOrigin } from "@/lib/i9/server";
 import { sendI9Task, sendWelcome } from "@/lib/i9/mail";
-import { hashPassword, tempPassword, TS_BUCKET } from "@/lib/portal/server";
+import { TS_BUCKET } from "@/lib/portal/server";
+import { issueTempPassword, openI9 } from "@/lib/portal/accounts";
 import type { ActionState } from "../actions";
 import { addDays, todayCT } from "@/lib/portal/dates";
 import { startFor } from "@/lib/onboarding/start";
@@ -14,7 +15,6 @@ import { recomputeDraft, syncDraftInvoices } from "@/lib/invoices/server";
 const clip = (v: FormDataEntryValue | null, max = 200) => String(v ?? "").trim().slice(0, max);
 const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-const TEMP_DAYS = 7;
 
 const num = (v: string) => (v ? Number(v) : null);
 
@@ -107,39 +107,6 @@ export async function unassignConsultant(_prev: ActionState, formData: FormData)
   await audit(null, `hr:${hr}`, "consultant_unassigned", { personId });
   revalidatePath("/hr/vendors");
   return { ok: true, message: "Unassigned." };
-}
-
-async function issueTempPassword(id: string) {
-  const pw = tempPassword();
-  const { data: p } = await db()
-    .from("stagity_people")
-    .select("session_version")
-    .eq("id", id)
-    .single();
-  await db()
-    .from("stagity_people")
-    .update({
-      password_hash: await hashPassword(pw),
-      must_change_password: true,
-      temp_password_expires_at: new Date(Date.now() + TEMP_DAYS * 86400_000).toISOString(),
-      session_version: (p?.session_version ?? 1) + 1,
-      failed_logins: 0,
-      locked_until: null,
-    })
-    .eq("id", id);
-  return pw;
-}
-
-async function openI9(personId: string, hr: string, p: { first_name: string; last_name: string; email: string; job?: string | null }, firstDay: string | null) {
-  const { data: existing } = await db().from("stagity_i9_cases").select("id").eq("person_id", personId).neq("status", "cancelled").limit(1).maybeSingle();
-  if (existing) return false;
-  const { data } = await db()
-    .from("stagity_i9_cases")
-    .insert({ created_by: hr, person_id: personId, employee_first_name: p.first_name, employee_last_name: p.last_name, employee_email: p.email, first_day: firstDay })
-    .select("id")
-    .single();
-  if (data) await audit(data.id, `hr:${hr}`, "case_created", { personId, firstDay });
-  return true;
 }
 
 export async function registerPerson(_prev: ActionState, formData: FormData): Promise<ActionState> {

@@ -5,7 +5,10 @@ import { FILE_KINDS, OB_BUCKET, WORK_STATUSES, decryptDeposit, decryptPersonal, 
 import { money } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
 import BackLink from "../../BackLink";
-import { AddPersonDocButton, CancelSig, DueForm, RequestTemplate, ResendButton, ReturnButton } from "../forms";
+import { AddPersonDocButton, CancelSig, CopyToDriveButton, CountersignButton, DueForm, OfferButton, RequestTemplate, ResendButton, ReturnButton } from "../forms";
+import { companySigner, payText } from "@/lib/onboarding/offer";
+import { statusLabels } from "@/lib/i9/forms";
+import { driveConfigured } from "@/lib/gdrive";
 
 const fs: Record<string, string> = { single: "Single or Married filing separately", married_joint: "Married filing jointly", head: "Head of household" };
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) : "");
@@ -22,6 +25,18 @@ export default async function PersonOnboarding({ params }: { params: Promise<{ i
     db().from("stagity_signatures").select("*").eq("person_id", id).neq("status", "cancelled").order("requested_at"),
     db().from("stagity_doc_templates").select("id, title").eq("active", true).order("title"),
   ]);
+  const [{ data: offer }, { data: i9 }, signer, { data: pp }] = await Promise.all([
+    db().from("stagity_offers").select("*").eq("person_id", id).neq("status", "cancelled").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    db().from("stagity_i9_cases").select("id, status, everify_case_number, everify_status").eq("person_id", id).neq("status", "cancelled").limit(1).maybeSingle(),
+    companySigner(),
+    db().from("stagity_people").select("start_date, client_name, pay_rate, monthly_pay").eq("id", id).single(),
+  ]);
+  const offerSig = offer?.signature_id ? (sigs ?? []).find((x) => x.id === offer.signature_id) : null;
+  const offerUrl = offerSig ? (await db().storage.from(OB_BUCKET).createSignedUrl(offerSig.signed_path ?? offerSig.source_path, 600)).data?.signedUrl : null;
+  const offerDefaults = offer
+    ? { jobTitle: offer.job_title, startDate: offer.start_date ?? "", employmentType: offer.employment_type, payType: offer.pay_type, payAmount: Number(offer.pay_amount), paySchedule: offer.pay_schedule, workLocation: offer.work_location ?? "", clientName: offer.client_name ?? "", jobDescription: offer.job_description ?? "", jobDuties: offer.job_duties ?? "", extraTerms: offer.extra_terms ?? "" }
+    : { startDate: pp?.start_date ?? "", clientName: pp?.client_name ?? "", payType: pp?.monthly_pay ? "monthly" : "hourly", payAmount: pp?.monthly_pay ? Number(pp.monthly_pay) : pp?.pay_rate ? Number(pp.pay_rate) : undefined };
+  const offerStatus: Record<string, string> = { sent: "Waiting for their signature", employee_signed: "Signed by employee: your countersignature needed", completed: "Fully signed", draft: "Draft" };
   if (!p || !s) notFound();
   await audit(null, `hr:${hr}`, "onboarding_viewed", { personId: id });
   const personal = decryptPersonal(s.ob.personal_enc);
@@ -45,6 +60,7 @@ export default async function PersonOnboarding({ params }: { params: Promise<{ i
         <div className="hr-detail-actions">
           <span className={`i9-badge ${s.ob.completed_at ? "s-closed" : "s-section1_complete"}`}>{s.ob.completed_at ? "Complete" : "In progress"}</span>
           <a className="btn btn-primary hr-btn-sm" href={`/hr/onboarding/${id}/pdf?form=all`} target="_blank" rel="noreferrer">Download forms (PDF)</a>
+          {driveConfigured() && <CopyToDriveButton personId={id} />}
         </div>
       </div>
       {s.ob.returned_note && !s.ob.completed_at && <p className="ack-warn"><strong>Sent back:</strong> {s.ob.returned_note}</p>}
@@ -55,6 +71,43 @@ export default async function PersonOnboarding({ params }: { params: Promise<{ i
           <DueForm personId={id} due={s.ob.due_date ?? ""} />
           <ResendButton personId={id} />
           <ReturnButton personId={id} />
+        </div>
+      </div>
+
+      <div className="hr-two">
+        <div className="hr-panel">
+          <div className="hr-title" style={{ marginBottom: 6 }}>
+            <h2 className="i9-h3">Offer letter</h2>
+            <OfferButton personId={id} d={offerDefaults} label={offer ? (offer.status === "completed" ? "New offer letter" : "Edit / replace") : "Create offer letter"} />
+          </div>
+          {offer ? (
+            <>
+              <dl className="i9-dl">
+                <Row k="Status" v={<span className={`i9-badge ${offer.status === "completed" ? "s-closed" : offer.status === "employee_signed" ? "pay-short" : "s-section1_complete"}`}>{offerStatus[offer.status] ?? offer.status}</span>} />
+                <Row k="Job" v={`${offer.job_title} · ${offer.employment_type}`} />
+                <Row k="Pay" v={`${payText(offer)} · ${offer.pay_schedule}`} />
+                <Row k="Start date" v={offer.start_date} />
+                {offerSig?.signed_at && <Row k="Employee signed" v={`${offerSig.signed_name}, ${when(offerSig.signed_at)}`} />}
+                {offer.countersigned_at && <Row k="You countersigned" v={when(offer.countersigned_at)} />}
+              </dl>
+              <div className="btn-row" style={{ marginTop: 10, alignItems: "center" }}>
+                {offerUrl && <a className="btn btn-outline hr-btn-sm" href={offerUrl} target="_blank" rel="noreferrer">View PDF</a>}
+                {offer.status === "employee_signed" && <CountersignButton offerId={offer.id} signer={signer.name} />}
+              </div>
+              {offer.status === "employee_signed" && !signer.name && <p className="ack-warn" style={{ marginTop: 8 }}>Add your name and signature image under Onboarding → Offer letter template first.</p>}
+            </>
+          ) : <p className="muted">No offer letter yet. Create one: they sign it in the portal, then you countersign.</p>}
+        </div>
+        <div className="hr-panel">
+          <h2 className="i9-h3">Form I-9 &amp; E-Verify</h2>
+          {i9 ? (
+            <dl className="i9-dl">
+              <Row k="Form I-9" v={<><span className={`i9-badge s-${i9.status}`}>{statusLabels[i9.status] ?? i9.status}</span> <Link href={`/hr/cases/${i9.id}`}>Open</Link></>} />
+              <Row k="E-Verify" v={i9.everify_case_number ? `Case ${i9.everify_case_number}: ${i9.everify_status ?? "submitted"}` : "Not recorded yet. Run it at e-verify.uscis.gov after Section 2, then enter the case number on the I-9 page."} />
+            </dl>
+          ) : (
+            <p className="muted">Starts automatically when they submit their documents{s.ob.docs_submitted_at ? "" : " (not yet)"}. You can also start it now from their <Link href={`/hr/people/${id}`}>profile</Link>.</p>
+          )}
         </div>
       </div>
 
@@ -135,7 +188,7 @@ export default async function PersonOnboarding({ params }: { params: Promise<{ i
           <div className="i9-table-wrap">
             <table className="i9-table">
               <tbody>
-                {sigLinks.map((x) => (
+                {sigLinks.filter((x) => !x.offer_id).map((x) => (
                   <tr key={x.id}>
                     <td><a href={x.url} target="_blank" rel="noreferrer"><strong>{x.title}</strong></a></td>
                     <td>{x.status === "signed" ? <span className="i9-badge s-closed">✓ Signed by {x.signed_name}, {when(x.signed_at)}</span> : <span className="i9-badge s-section1_complete">Waiting for signature</span>}</td>

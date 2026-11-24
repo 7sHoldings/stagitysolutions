@@ -3,7 +3,10 @@ import { db, requireHr } from "@/lib/i9/server";
 import { onboardingSteps } from "@/lib/onboarding/server";
 import { todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
-import { AddTemplateButton, StartButton, TemplateToggle } from "./forms";
+import { AddTemplateButton, NewHireButton, OfferSettingsForm, StartExistingButton, TemplateToggle } from "./forms";
+import { PLACEHOLDERS, companySigner, offerTemplate } from "@/lib/onboarding/offer";
+import { OB_BUCKET } from "@/lib/onboarding/server";
+import { driveConfigured } from "@/lib/gdrive";
 
 const short: Record<string, string> = { details: "Contact", personal: "Personal info", w4: "W-4", deposit: "Deposit", documents: "Documents", i9: "I-9" };
 
@@ -20,6 +23,10 @@ export default async function Onboarding() {
   const startable = (people ?? []).filter((p) => !(obs ?? []).some((o) => o.person_id === p.id)).map((p) => ({ id: p.id, name: `${p.first_name} ${p.last_name}` }));
   const active = (templates ?? []).filter((t) => t.active);
   const done = rows.filter((r) => r.o.completed_at).length;
+  const tplOpts = active.map((t) => ({ id: t.id, name: t.title, defaultOn: t.default_for_new }));
+  const [tpl, signer] = await Promise.all([offerTemplate(), companySigner()]);
+  const sigUrl = signer.imagePath ? (await db().storage.from(OB_BUCKET).createSignedUrl(signer.imagePath, 600)).data?.signedUrl ?? null : null;
+  const drive = driveConfigured();
 
   return (
     <section className="container hr-page">
@@ -29,7 +36,10 @@ export default async function Onboarding() {
           <h1 className="h2">Onboarding</h1>
           <p className="muted">New-hire paperwork: Personal Information form, Form W-4, Direct Deposit Agreement, documents and e-signatures. {rows.length ? `${done} of ${rows.length} complete.` : ""}</p>
         </div>
-        <StartButton people={startable} templates={active.map((t) => ({ id: t.id, name: t.title, defaultOn: t.default_for_new }))} />
+        <div className="btn-row" style={{ alignItems: "center" }}>
+          <StartExistingButton people={startable} templates={tplOpts} />
+          <NewHireButton templates={tplOpts} />
+        </div>
       </div>
 
       <div className="hr-panel">
@@ -86,6 +96,29 @@ export default async function Onboarding() {
             </table>
           </div>
         ) : <p className="muted i9-small">None yet.</p>}
+      </div>
+      <details className="hr-panel ob-settings">
+        <summary><h2 className="i9-h3" style={{ display: "inline" }}>Offer letter template &amp; your signature</h2>{!signer.name && <span className="pay-short i9-badge" style={{ marginLeft: 8 }}>Add your signature</span>}</summary>
+        <div style={{ marginTop: 14 }}>
+          <OfferSettingsForm template={tpl} signerName={signer.name} signerTitle={signer.title} placeholders={PLACEHOLDERS} signatureUrl={sigUrl} />
+        </div>
+      </details>
+
+      <div className={`hr-panel ${drive ? "" : "ob-drive-off"}`}>
+        <h2 className="i9-h3">Google Drive</h2>
+        {drive ? (
+          <p className="muted i9-small">Connected. Every form, uploaded document and signed PDF is also saved to your Drive, in a folder per employee (&ldquo;Last, First&rdquo; → Forms / Documents / Signed).</p>
+        ) : (
+          <>
+            <p className="muted i9-small">Not connected yet. Everything is saved in the portal now; once Drive is connected, copies also go to a folder per employee. One-time setup (about 10 minutes):</p>
+            <ol className="i9-small" style={{ margin: "6px 0 0 18px", lineHeight: 1.7 }}>
+              <li>In Google Drive (your Workspace), create a <strong>Shared drive</strong>, e.g. &ldquo;Employee Onboarding&rdquo;.</li>
+              <li>At console.cloud.google.com: create a project → enable the <strong>Google Drive API</strong> → create a <strong>service account</strong> → Keys → Add key → JSON (a file downloads).</li>
+              <li>In the Shared drive: Manage members → add the service account&apos;s email as <strong>Content manager</strong>.</li>
+              <li>In Vercel → Settings → Environment Variables add <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> (paste the whole JSON file) and <code>GOOGLE_DRIVE_FOLDER_ID</code> (the ID at the end of the Shared drive&apos;s URL). Redeploy.</li>
+            </ol>
+          </>
+        )}
       </div>
     </section>
   );

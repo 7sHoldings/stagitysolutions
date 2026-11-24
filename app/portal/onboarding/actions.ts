@@ -2,9 +2,15 @@
 
 import { randomUUID, createHash } from "node:crypto";
 import { headers } from "next/headers";
+import { after as afterResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { audit, db } from "@/lib/i9/server";
+import { audit, db, siteOrigin } from "@/lib/i9/server";
+import { send, sendI9Task } from "@/lib/i9/mail";
+import { company } from "@/lib/content";
+import { openI9 } from "@/lib/portal/accounts";
+import { docFileName, syncFileToDrive, syncFormsToDrive } from "@/lib/onboarding/sync";
+import { buildOfferPdf, companySigner, type Offer } from "@/lib/onboarding/offer";
 import { portalPerson } from "@/lib/portal/server";
 import {
   OB_BUCKET, FILE_KINDS, checkComplete, decryptPersonal, encryptDeposit, encryptPersonal, encryptW4, requiredDocs, validRouting,
@@ -32,9 +38,10 @@ async function me() {
   return ob ? { p, ob } : null;
 }
 
-async function after(personId: string, action: string) {
+async function after(personId: string, action: string, forms = false) {
   await audit(null, `person:${personId}`, action);
   await checkComplete(personId);
+  if (forms) afterResponse(() => syncFormsToDrive(personId)); // copy to Google Drive after the page responds
   revalidatePath("/portal/onboarding");
 }
 
@@ -61,7 +68,7 @@ export async function savePersonal(_prev: ObState, f: FormData): Promise<ObState
   if (v.personalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.personalEmail)) return { error: "Check your personal email." };
   if (!v.workAddress) return { error: "Enter your work location (client office address, or 'Remote' with your city)." };
   await db().from("stagity_onboarding").update({ personal_enc: encryptPersonal(v), personal_submitted_at: new Date().toISOString(), work_status: v.workStatus }).eq("person_id", m.p.id);
-  await after(m.p.id, "onboarding_personal_saved");
+  await after(m.p.id, "onboarding_personal_saved", true);
   redirect("/portal/onboarding?saved=personal");
 }
 
@@ -89,7 +96,7 @@ export async function saveW4(_prev: ObState, f: FormData): Promise<ObState> {
     return { error: `Please sign with your full legal name (${expected}).` };
   }
   await db().from("stagity_onboarding").update({ w4_enc: encryptW4(w), w4_submitted_at: w.signedAt }).eq("person_id", m.p.id);
-  await after(m.p.id, "onboarding_w4_signed");
+  await after(m.p.id, "onboarding_w4_signed", true);
   redirect("/portal/onboarding?saved=w4");
 }
 
@@ -107,7 +114,7 @@ export async function saveDeposit(_prev: ObState, f: FormData): Promise<ObState>
   if (d.account !== confirm) return { error: "The two account numbers don't match." };
   if (!d.signedName || f.get("agree") !== "on") return { error: "Type your full name and tick the box to sign the agreement." };
   await db().from("stagity_onboarding").update({ deposit_enc: encryptDeposit(d), deposit_last4: d.account.slice(-4), deposit_submitted_at: d.signedAt }).eq("person_id", m.p.id);
-  await after(m.p.id, "onboarding_deposit_signed");
+  await after(m.p.id, "onboarding_deposit_signed", true);
   redirect("/portal/onboarding?saved=deposit");
 }
 
@@ -141,6 +148,7 @@ export async function recordDoc(kind: string, path: string, mime: string, name: 
     .select("id")
     .single();
   if (error || !data) return { error: "Couldn't save the upload." };
+  afterResponse(() => syncFileToDrive(m.p.id, path, docFileName(kind, name), "Documents"));
   revalidatePath("/portal/onboarding/documents");
   return { ok: true, id: data.id as string };
 }
@@ -165,6 +173,16 @@ export async function submitDocs(_prev: ObState): Promise<ObState> {
   const missing = requiredDocs(m.ob.work_status).filter((k) => !have.has(k));
   if (missing.length) return { error: `Still needed: ${missing.map((k) => FILE_KINDS[k]).join(", ")}.` };
   await db().from("stagity_onboarding").update({ docs_submitted_at: new Date().toISOString() }).eq("person_id", m.p.id);
+  // Documents are in: start Form I-9 automatically and tell the employee and HR.
+  const { data: person } = await db().from("stagity_people").select("first_name, last_name, email, start_date").eq("id", m.p.id).single();
+  if (person?.email) {
+    const opened = await openI9(m.p.id, "onboarding", { first_name: person.first_name, last_name: person.last_name, email: person.email }, person.start_date);
+    if (opened) await sendI9Task(person.email, person.first_name, `${siteOrigin()}/portal/i9`, person.start_date);
+    await send(company.email, `${person.first_name} ${person.last_name} uploaded their onboarding documents`, [
+      `${person.first_name} ${person.last_name} submitted all required documents.`,
+      opened ? "Form I-9 was started automatically and they were emailed to complete Section 1. Next: review Section 1, complete Section 2, then run E-Verify." : "Their Form I-9 was already started.",
+    ], { label: "Open onboarding", href: `${siteOrigin()}/hr/onboarding/${m.p.id}` }, { signature: "Stagity Solutions Portal" });
+  }
   await after(m.p.id, "onboarding_docs_submitted");
   redirect("/portal/onboarding?saved=documents");
 }
@@ -180,13 +198,25 @@ export async function signDocument(_prev: ObState, f: FormData): Promise<ObState
   if (f.get("agree") !== "on") return { error: "Tick the box to agree to sign electronically." };
   const { data: s } = await db().from("stagity_signatures").select("*").eq("id", id).eq("person_id", m.p.id).maybeSingle();
   if (!s || s.status !== "pending") return { error: "This document isn't waiting for your signature." };
-  const { data: blob } = await db().storage.from(OB_BUCKET).download(s.source_path);
-  if (!blob) return { error: "Couldn't open the document. Please contact HR." };
-  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const signedAtNow = new Date().toISOString();
+  let bytes: Uint8Array;
+  let offer: Offer | null = null;
+  if (s.offer_id) {
+    // Offer letters are re-rendered with the employee's signature in the signature block.
+    const { data: o } = await db().from("stagity_offers").select("*").eq("id", s.offer_id).single();
+    offer = o as Offer | null;
+    if (!offer?.body_snapshot) return { error: "Couldn't open the offer letter. Please contact HR." };
+    const signer = await companySigner();
+    bytes = await buildOfferPdf(offer.body_snapshot, { name, signedAt: signedAtNow }, { name: signer.name, title: signer.title });
+  } else {
+    const { data: blob } = await db().storage.from(OB_BUCKET).download(s.source_path);
+    if (!blob) return { error: "Couldn't open the document. Please contact HR." };
+    bytes = new Uint8Array(await blob.arrayBuffer());
+  }
   const sha = createHash("sha256").update(bytes).digest("hex");
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim();
-  const signedAt = new Date().toISOString();
+  const signedAt = signedAtNow;
   let signed: Uint8Array;
   try {
     signed = await stampSignedPdf(bytes, { title: s.title, name, email: m.p.email, signedAt, ip, sha256: sha });
@@ -201,6 +231,14 @@ export async function signDocument(_prev: ObState, f: FormData): Promise<ObState
     .update({ status: "signed", signed_at: signedAt, signed_name: name, signed_ip: ip || null, signed_ua: h.get("user-agent")?.slice(0, 300) ?? null, doc_sha256: sha, signed_path: signedPath })
     .eq("id", id)
     .eq("status", "pending");
+  if (offer) {
+    await db().from("stagity_offers").update({ status: "employee_signed" }).eq("id", offer.id);
+    await send(company.email, `${m.p.first_name} ${m.p.last_name} signed the offer letter: please countersign`, [
+      `${m.p.first_name} ${m.p.last_name} signed their offer letter (${offer.job_title}).`,
+      "Open their onboarding page and tap Countersign to add your signature. They'll be emailed the fully signed copy.",
+    ], { label: "Countersign offer letter", href: `${siteOrigin()}/hr/onboarding/${m.p.id}` }, { signature: "Stagity Solutions Portal" });
+  }
+  afterResponse(() => syncFileToDrive(m.p.id, signedPath, `${s.title.replace(/[\\/:*?"<>|]/g, "")} (signed by employee).pdf`, "Signed"));
   await after(m.p.id, "onboarding_document_signed");
   redirect("/portal/onboarding?saved=signed");
 }

@@ -841,3 +841,9 @@ a.pay-sum:hover .hr-sum-n { text-decoration: underline; }
 .ob-chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .ob-chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; }
 .ob-chip.done { background: #dcfce7; color: #166534; }
+.ob-sigbox { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px dashed #cbd5e1; border-radius: 12px; }
+.ob-settings > summary { cursor: pointer; list-style: none; display: flex; align-items: center; }
+.ob-settings > summary::-webkit-details-marker { display: none; }
+.ob-settings > summary::after { content: "▾"; margin-left: auto; color: #6b7280; }
+.ob-settings[open] > summary::after { content: "▴"; }
+.ob-drive-off { border-style: dashed; }

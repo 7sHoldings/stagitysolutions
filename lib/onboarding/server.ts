@@ -176,3 +176,22 @@ export function sendOnboardingReminder(to: string, firstName: string, due: strin
     `Questions? Reply to this email or call ${company.phone}.`,
   ], { label: "Continue onboarding", href: `${siteOrigin()}/portal/onboarding` });
 }
+
+/** The one email a new hire gets: welcome, what to do, and their portal login. */
+export function sendNewHireEmail(to: string, firstName: string, tempPassword: string, due: string | null, hasOffer: boolean) {
+  const dueText = due ? new Date(`${due}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }) : null;
+  return send(to, "Welcome to Stagity Solutions LLC: your onboarding and portal login", [
+    `Hi ${firstName},`,
+    "Welcome to Stagity Solutions LLC! We're excited to have you on the team.",
+    `Please complete your new-hire paperwork in our employee portal${dueText ? ` by ${dueText}` : " as soon as possible"}. Everything is online: fill in the forms, upload photos of your documents and sign. No printing or scanning.`,
+    "## Your login",
+    `Portal: ${siteOrigin()}/portal/login\nEmail: ${to}\nTemporary password: ${tempPassword}\nThe temporary password expires in 7 days. You'll choose your own password when you first sign in.`,
+    "## Step 1: Forms (in the portal)",
+    `• Employee Personal Information form\n• Form W-4\n• Direct Deposit Agreement${hasOffer ? "\n• Your Employment Offer Letter: review and sign" : ""}\n• Any company documents listed for you to sign`,
+    "## Step 2: Documents to upload (a clear phone photo or PDF)",
+    "• Social Security card, driver's license and a voided check\n• I-94, passport, and your visa or EAD card (if you're not a U.S. citizen)\n• 10th, Inter, Bachelor's and Master's certificates",
+    "## Step 3: Form I-9",
+    "Once your documents are uploaded, we'll email you a link to complete Form I-9 Section 1. Then HR will verify your documents and complete E-Verify.",
+    `Questions? Reply to this email or call ${company.phone}.`,
+  ], { label: "Sign in and start", href: `${siteOrigin()}/portal/login` });
+}
