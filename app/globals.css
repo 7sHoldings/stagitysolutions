@@ -803,3 +803,19 @@ a.pay-sum:hover .hr-sum-n { text-decoration: underline; }
 .pay-vendor select { font: inherit; font-size: 14.5px; font-weight: 600; height: 38px; padding: 0 32px 0 12px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: #111827; max-width: 280px; }
 .pay-remind { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 16px; margin-bottom: 14px; border-radius: 12px; background: #eff6ff; color: #1e3a8a; font-size: 14.5px; }
 @media (max-width: 640px) { .pay-vendor, .pay-vendor select { width: 100%; max-width: none; } }
+.pay-table td.pay-month { white-space: nowrap; }
+.pay-table td.pay-month strong { display: inline-block; padding: 3px 10px; border-radius: 8px; background: #f1f5f9; font-size: 14px; }
+@media (max-width: 700px) {
+  .pay-table td.pay-month { grid-column: 1 / -1; display: block !important; font-size: 14px; }
+  .pay-table td.pay-month::before { content: none !important; }
+  .pay-table td.pay-who { grid-row: 2; }
+  .pay-table td.pay-amt { grid-row: 2 !important; }
+}
+@media (max-width: 700px) {
+  .pay-table td[data-label]:not(.pay-amt) { flex-wrap: wrap; min-width: 0; }
+  .pay-table td[data-label]:not(.pay-amt) > * { min-width: 0; overflow-wrap: anywhere; }
+  .pay-table td.pay-status { grid-column: 1 / -1 !important; }
+  .pay-table td.pay-status .i9-badge { white-space: normal; }
+  .pay-table td.pay-act { grid-column: 1 / -1 !important; justify-self: start !important; display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .pay-table tr { grid-template-columns: minmax(0, 1fr) auto; }
+}

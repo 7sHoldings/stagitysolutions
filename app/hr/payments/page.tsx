@@ -151,7 +151,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
           <div className="i9-table-wrap">
             <table className="i9-table pay-table">
               <thead>
-                <tr><th>Consultant · vendor</th><th>Invoice</th><th>Terms</th><th>Expected by</th><th className="i9-num">Amount</th><th>Status</th><th></th></tr>
+                <tr><th>Month</th><th>Consultant · vendor</th><th>Invoice</th><th>Terms</th><th>Expected by</th><th className="i9-num">Amount</th><th>Status</th><th></th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
@@ -161,8 +161,9 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                   const name = `${r.stagity_people.first_name} ${r.stagity_people.last_name}`;
                   return (
                     <tr key={r.id} className={r.status === "sent" && late > 0 ? "pay-overdue" : ""}>
+                      <td className="pay-month" data-label="Month"><strong>{monthLabel(r.period_start)}</strong></td>
                       <td className="pay-who"><strong>{name}</strong><div className="muted i9-small">{r.stagity_vendors.name}</div></td>
-                      <td data-label="Invoice"><Link href={`/hr/invoices/${r.id}`}>#{r.number}</Link>{r.imported && <span className="pay-old">before portal</span>}<div className="muted i9-small">{monthLabel(r.period_start)} · sent {nice(r.issue_date)}</div></td>
+                      <td data-label="Invoice"><Link href={`/hr/invoices/${r.id}`}>#{r.number}</Link>{r.imported && <span className="pay-old">before portal</span>}<div className="muted i9-small">sent {nice(r.issue_date)}</div></td>
                       <td data-label="Terms">{terms == null ? "—" : r.status === "sent" && r.issue_date ? <TermsButton id={r.id} issueDate={r.issue_date} days={terms} /> : `Net ${terms}`}</td>
                       <td data-label="Expected by">{nice(r.due_date)}</td>
                       <td className="i9-num pay-amt" data-label="Amount">
