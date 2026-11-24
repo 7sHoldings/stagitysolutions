@@ -19,8 +19,9 @@ export type Personal = {
 export type W4 = {
   filingStatus: "single" | "married_joint" | "head";
   multipleJobs: boolean;               // Step 2(c)
-  childrenAmount: number;              // Step 3: qualifying children × $2,000
-  otherDependentsAmount: number;       // Step 3: other dependents × $500
+  childrenAmount: number;              // Step 3(a): qualifying children × $2,200 (2026)
+  otherDependentsAmount: number;       // Step 3(b): other dependents × $500
+  children?: number; otherDependents?: number;
   otherIncome: number;                 // Step 4(a)
   deductions: number;                  // Step 4(b)
   extraWithholding: number;            // Step 4(c)

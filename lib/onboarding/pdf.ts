@@ -11,7 +11,7 @@ const usd = (n: number) => (n ? n.toLocaleString("en-US", { minimumFractionDigit
 const mdY = (iso: string) => (iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}` : "");
 const ssnFmt = (s: string) => s.replace(/\D/g, "").replace(/^(\d{3})(\d{2})(\d{4})$/, "$1-$2-$3");
 
-/** Fills the official IRS Form W-4 (lib/onboarding/assets/fw4.pdf) and adds the typed signature. */
+/** Fills the official IRS Form W-4, 2026 edition (lib/onboarding/assets/fw4.pdf), and adds the typed signature. */
 export async function buildW4Pdf(p: Personal, w: W4) {
   const doc = await PDFDocument.load(await asset("fw4.pdf"), { ignoreEncryption: true });
   const form = doc.getForm();
@@ -29,23 +29,23 @@ export async function buildW4Pdf(p: Personal, w: W4) {
   check("c1_1[0]", w.filingStatus === "single");
   check("c1_1[1]", w.filingStatus === "married_joint");
   check("c1_1[2]", w.filingStatus === "head");
-  check("Step2c[0].c1_2[0]", w.multipleJobs);
+  check("c1_2[0]", w.multipleJobs);
+  check("c1_3[0]", w.exempt);
   set("Step3_ReadOrder[0].f1_06[0]", usd(w.childrenAmount));
   set("Step3_ReadOrder[0].f1_07[0]", usd(w.otherDependentsAmount));
   set("f1_08[0]", usd(w.childrenAmount + w.otherDependentsAmount));
   set("f1_09[0]", usd(w.otherIncome));
   set("f1_10[0]", usd(w.deductions));
   set("f1_11[0]", usd(w.extraWithholding));
-  set("f1_13[0]", `${company.legalName}, ${company.addressLine1}, ${company.addressLine2}`);
-  set("f1_15[0]", EIN);
+  set("f1_12[0]", `${company.legalName}\n${company.addressLine1}, ${company.addressLine2}`);
+  set("f1_14[0]", EIN);
   form.flatten();
   const page = doc.getPages()[0];
   const font = await doc.embedFont(StandardFonts.HelveticaOblique);
   const plain = await doc.embedFont(StandardFonts.Helvetica);
-  if (w.exempt) page.drawText("Exempt", { x: 400, y: 190, size: 11, font: plain });
-  page.drawText(w.signedName, { x: 110, y: 143, size: 13, font });
-  page.drawText(mdY(w.signedAt.slice(0, 10)), { x: 466, y: 143, size: 11, font: plain });
-  page.drawText(`Signed electronically in the Stagity Solutions portal, ${new Date(w.signedAt).toUTCString()}`, { x: 36, y: 22, size: 6.5, font: plain, color: rgb(0.35, 0.35, 0.35) });
+  page.drawText(w.signedName, { x: 110, y: 96, size: 13, font });
+  page.drawText(mdY(w.signedAt.slice(0, 10)), { x: 466, y: 96, size: 11, font: plain });
+  page.drawText(`Signed electronically in the Stagity Solutions portal, ${new Date(w.signedAt).toUTCString()}`, { x: 36, y: 8, size: 6.5, font: plain, color: rgb(0.35, 0.35, 0.35) });
   return doc.save();
 }
 

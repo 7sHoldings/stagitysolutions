@@ -12,6 +12,9 @@ import {
 } from "@/lib/onboarding/server";
 import { stampSignedPdf } from "@/lib/onboarding/pdf";
 
+/** 2026 Form W-4, Step 3(a). Update with the form each year. */
+const W4_CHILD_CREDIT = 2200;
+
 export type ObState = { error?: string; message?: string; ok?: boolean };
 
 const get = (f: FormData, k: string, max = 160) => String(f.get(k) ?? "").trim().replace(/\s+/g, " ").slice(0, max);
@@ -71,7 +74,7 @@ export async function saveW4(_prev: ObState, f: FormData): Promise<ObState> {
   const others = Math.round(Number(get(f, "others", 3) || 0));
   const w: W4 = {
     filingStatus: fs, multipleJobs: f.get("multipleJobs") === "on",
-    childrenAmount: children * 2000, otherDependentsAmount: others * 500,
+    childrenAmount: children * W4_CHILD_CREDIT, otherDependentsAmount: others * 500, children, otherDependents: others,
     otherIncome: money(f, "otherIncome"), deductions: money(f, "deductions"), extraWithholding: money(f, "extraWithholding"),
     exempt: f.get("exempt") === "on", signedName: get(f, "signedName", 120), signedAt: new Date().toISOString(),
   };

@@ -21,7 +21,7 @@ export default async function W4Page() {
       ) : (
         <W4Form
           name={`${personal.firstName} ${personal.lastName}`}
-          d={w ? { ...w, children: w.childrenAmount / 2000, others: w.otherDependentsAmount / 500 } : undefined}
+          d={w ? { ...w, children: w.children ?? Math.round(w.childrenAmount / 2200), others: w.otherDependents ?? Math.round(w.otherDependentsAmount / 500) } : undefined}
         />
       )}
     </ObPage>

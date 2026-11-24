@@ -78,9 +78,9 @@ export function W4Form({ name, d }: { name: string; d?: { filingStatus?: string;
       </div>
       <H t="Step 2: Multiple jobs or spouse works" />
       <label className="i9-check"><input type="checkbox" name="multipleJobs" defaultChecked={d?.multipleJobs} /> Tick only if there are exactly two jobs in total (you and your spouse, or two jobs for you) with similar pay (Step 2c)</label>
-      <H t="Step 3: Dependents (if total income is $200,000 or less, $400,000 if married filing jointly)" />
+      <H t="Step 3: Dependents and other credits (if total income is $200,000 or less, $400,000 if married filing jointly)" />
       <div className="form-grid">
-        <label className="field">Qualifying children under 17<Hint t="× $2,000" /><input name="children" type="number" min={0} max={20} defaultValue={d?.children ?? 0} /></label>
+        <label className="field">Qualifying children under 17<Hint t="× $2,200" /><input name="children" type="number" min={0} max={20} defaultValue={d?.children ?? 0} /></label>
         <label className="field">Other dependents<Hint t="× $500" /><input name="others" type="number" min={0} max={20} defaultValue={d?.others ?? 0} /></label>
       </div>
       <H t="Step 4 (optional): Other adjustments" />
@@ -89,7 +89,7 @@ export function W4Form({ name, d }: { name: string; d?: { filingStatus?: string;
         <label className="field">4(b) Deductions, per year ($)<input name="deductions" inputMode="decimal" defaultValue={d?.deductions || ""} placeholder="0" /></label>
         <label className="field">4(c) Extra withholding, per pay period ($)<input name="extraWithholding" inputMode="decimal" defaultValue={d?.extraWithholding || ""} placeholder="0" /></label>
       </div>
-      <label className="i9-check"><input type="checkbox" name="exempt" defaultChecked={d?.exempt} /> I claim exemption from withholding (only if you had no tax liability last year and expect none this year)</label>
+      <label className="i9-check"><input type="checkbox" name="exempt" defaultChecked={d?.exempt} /> I claim exemption from withholding for 2026 (only if you had no federal income tax liability in 2025 and expect none in 2026)</label>
       <div className="ob-sign">
         <H t="Step 5: Sign" />
         <p className="muted i9-small" style={{ margin: 0 }}>Under penalties of perjury, I declare that this certificate, to the best of my knowledge and belief, is true, correct, and complete.</p>
