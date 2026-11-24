@@ -783,3 +783,16 @@ a.pay-sum:hover .hr-sum-n { text-decoration: underline; }
 }
 .pay-short { background: #fffbeb; color: #b45309; }
 .pay-old { display: inline-block; margin-left: 6px; font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: #f3f4f6; color: #6b7280; vertical-align: middle; }
+
+/* Month picker: one compact control  ‹ [📅 January 2026 ▾] › */
+.mp { display: inline-flex; align-items: stretch; height: 42px; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; overflow: hidden; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+.mp-arrow { display: grid; place-items: center; width: 40px; color: #374151; text-decoration: none; transition: background .15s; }
+.mp-arrow:hover { background: #f3f4f6; color: #111827; }
+.mp-mid { position: relative; display: flex; align-items: center; border-left: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; cursor: pointer; }
+.mp-mid:hover { background: #f9fafb; }
+.mp-cal { position: absolute; left: 12px; color: #6b7280; pointer-events: none; }
+.mp-caret { position: absolute; right: 12px; color: #6b7280; pointer-events: none; }
+.mp-select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; font: inherit; font-size: 15px; font-weight: 600; color: #111827; height: 100%; padding: 0 34px 0 36px; cursor: pointer; min-width: 168px; }
+.mp-select:focus { outline: none; }
+.mp-mid:focus-within { box-shadow: inset 0 0 0 2px var(--accent, #1259d6); }
+@media (max-width: 640px) { .mp { width: 100%; } .mp-mid { flex: 1; } .mp-select { width: 100%; min-width: 0; } }
