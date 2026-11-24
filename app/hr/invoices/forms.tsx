@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import { acceptDifference, checkReadyNow, editImported, emailShortPayment, markPaid, removeImported, markUnpaid, sendInvoice, updateDraft, voidInvoice } from "./actions";
+import { acceptDifference, checkReadyNow, editImported, remindVendor, emailShortPayment, markPaid, removeImported, markUnpaid, sendInvoice, updateDraft, voidInvoice } from "./actions";
 import { Modal } from "../Modal";
 import { Status } from "../forms";
 import type { ActionState } from "../actions";
@@ -212,6 +212,37 @@ export function EditOldButton({ id, number, issueDate, total, label = "Edit" }: 
           <p className="muted i9-small" style={{ margin: "0 0 8px" }}>Not working that month / no invoice was sent?</p>
           <button className="btn hr-btn-danger hr-btn-sm" disabled={removing}>{removing ? "Removing…" : "Remove this month"}</button>
           {rs.error && <p className="form-status err">{rs.error}</p>}
+        </form>
+      </Modal>
+    </>
+  );
+}
+
+/** "Send payment reminder": preview the email to the vendor, add a note, send. */
+export function RemindVendorButton({ ids, vendor, to, preview, label = "Send payment reminder", className = "btn btn-primary hr-btn-sm" }: {
+  ids: string[]; vendor: string; to: string; preview: string[]; label?: string; className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [s, action, pending] = useActionState(remindVendor, {} as ActionState);
+  useEffect(() => { if (s.ok) setOpen(false); }, [s]);
+  if (s.ok) return <span className="hr-sent">✓ {s.message}</span>;
+  return (
+    <>
+      <button type="button" className={className} onClick={() => setOpen(true)}>{label}</button>
+      <Modal open={open} onClose={() => setOpen(false)} title={`Payment reminder to ${vendor}`} wide>
+        <form action={action} className="i9-stack" style={{ gap: 14 }}>
+          <input type="hidden" name="ids" value={ids.join(",")} />
+          <p className="muted i9-small">To: {to || "no email on file"} · from accounts@stagitysolutions.com · copy to accounts@ · invoice PDFs attached</p>
+          <div className="ack-body" style={{ borderTop: 0, paddingTop: 0 }}>
+            {preview.map((p, i) => <p key={i} style={{ whiteSpace: "pre-line" }}>{p}</p>)}
+            <p className="muted i9-small">Stagity Solutions Accounts</p>
+          </div>
+          <label className="field">Add a note <span className="field-hint">(optional, added before the closing)</span><textarea name="message" rows={3} style={{ minHeight: 80 }} /></label>
+          {s.error && <p className="form-status err">{s.error}</p>}
+          <div className="hr-modal-actions">
+            <button type="button" className="btn btn-outline hr-btn-sm" onClick={() => setOpen(false)}>Cancel</button>
+            <button className="btn btn-primary hr-btn-sm" disabled={pending || !to}>{pending ? "Sending…" : "Send reminder"}</button>
+          </div>
         </form>
       </Modal>
     </>

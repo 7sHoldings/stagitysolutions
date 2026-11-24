@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { setInvoiceTerms } from "./actions";
 import { markUnpaid } from "../invoices/actions";
 import { ConfirmAction, Modal } from "../Modal";
@@ -56,5 +57,19 @@ export function UndoReceived({ id, number }: { id: string; number: string }) {
       message={<>Set invoice <strong>#{number}</strong> back to <strong>not received</strong>?</>}
       confirmLabel="Yes, not received"
     />
+  );
+}
+
+/** Vendor dropdown: keeps the current view and month in the link. */
+export function VendorFilter({ vendors, value, base }: { vendors: { id: string; name: string }[]; value: string; base: string }) {
+  const router = useRouter();
+  return (
+    <label className="pay-vendor">
+      <span className="muted i9-small">Vendor</span>
+      <select value={value} onChange={(e) => router.push(`${base}${e.target.value ? `&vendor=${e.target.value}` : ""}`)} aria-label="Filter by vendor">
+        <option value="">All vendors</option>
+        {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+      </select>
+    </label>
   );
 }

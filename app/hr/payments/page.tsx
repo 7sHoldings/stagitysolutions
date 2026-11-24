@@ -3,15 +3,15 @@ import { db, requireHr } from "@/lib/i9/server";
 import { addDays, addMonths, money, monthEnd, monthLabel, monthStart, todayCT } from "@/lib/portal/dates";
 import HrNav from "../HrNav";
 import MonthPicker from "../MonthPicker";
-import { EditOldButton, MarkPaidButton, ShortPayActions } from "../invoices/forms";
+import { EditOldButton, MarkPaidButton, RemindVendorButton, ShortPayActions } from "../invoices/forms";
 import { expectedAmount } from "@/lib/invoices/payments";
-import { periodLabel, shortPaymentLines } from "@/lib/invoices/send";
-import { TermsButton, UndoReceived } from "./forms";
+import { paymentReminderLines, periodLabel, shortPaymentLines } from "@/lib/invoices/send";
+import { TermsButton, UndoReceived, VendorFilter } from "./forms";
 
 type Row = {
-  id: string; number: string; status: "sent" | "paid"; period_start: string; period_end: string; total: number;
+  id: string; vendor_id: string; number: string; status: "sent" | "paid"; period_start: string; period_end: string; total: number;
   issue_date: string | null; due_date: string | null; paid_at: string | null;
-  amount_received: number; adjustment: number; adjustment_reason: string | null; short_emailed_at: string | null; imported: boolean;
+  amount_received: number; adjustment: number; adjustment_reason: string | null; short_emailed_at: string | null; imported: boolean; last_reminder_at: string | null;
   stagity_people: { first_name: string; last_name: string };
   stagity_vendors: { name: string; ap_email: string; cc_emails: string | null; vms_fee_pct: number | null; dispute_days: number | null };
 };
@@ -21,7 +21,7 @@ const DAY = 86400_000;
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / DAY);
 const nice = (d: string | null) => (d ? new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "—");
 
-export default async function Payments({ searchParams }: { searchParams: Promise<{ month?: string; view?: string }> }) {
+export default async function Payments({ searchParams }: { searchParams: Promise<{ month?: string; view?: string; vendor?: string }> }) {
   const hr = await requireHr();
   const q = await searchParams;
   const today = todayCT();
@@ -30,7 +30,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
 
   const { data } = await db()
     .from("stagity_invoices")
-    .select("id, number, status, period_start, period_end, total, issue_date, due_date, paid_at, amount_received, adjustment, adjustment_reason, short_emailed_at, imported, stagity_people(first_name, last_name), stagity_vendors(name, ap_email, cc_emails, vms_fee_pct, dispute_days)")
+    .select("id, vendor_id, number, status, period_start, period_end, total, issue_date, due_date, paid_at, amount_received, adjustment, adjustment_reason, short_emailed_at, imported, last_reminder_at, stagity_people(first_name, last_name), stagity_vendors(name, ap_email, cc_emails, vms_fee_pct, dispute_days)")
     .in("status", ["sent", "paid"])
     .order("due_date", { ascending: true })
     .limit(2000);
@@ -53,18 +53,31 @@ export default async function Payments({ searchParams }: { searchParams: Promise
   const sum = (rows: Row[]) => rows.reduce((a, r) => a + left(r), 0);
   const sumReceived = (rows: Row[]) => rows.reduce((a, r) => a + Number(r.amount_received), 0);
 
+  // ---- Vendor filter ----
+  const vendorList = [...new Map(all.map((r) => [r.vendor_id, { id: r.vendor_id, name: r.stagity_vendors.name }])).values()].sort((a, b) => a.name.localeCompare(b.name));
+  const vendorId = q.vendor && vendorList.some((v) => v.id === q.vendor) ? q.vendor : "";
+  const vq = vendorId ? `&vendor=${vendorId}` : "";
+
   // ---- The selected list ----
   const inMonth = (d: string | null) => !!d && d >= month && d <= monthEnd(month);
   const rows =
     view === "open" ? open
     : view === "due" ? all.filter((r) => inMonth(r.due_date))
     : all.filter((r) => r.period_start <= monthEnd(month) && r.period_end >= month);
+  if (vendorId) rows.splice(0, rows.length, ...rows.filter((r) => r.vendor_id === vendorId));
   rows.sort((a, b) => Number(a.status === "paid") - Number(b.status === "paid") || String(a.due_date).localeCompare(String(b.due_date)));
+  const toItem = (r: Row) => ({
+    number: r.number, consultant: `${r.stagity_people.first_name} ${r.stagity_people.last_name}`, period: periodLabel(r.period_start, r.period_end),
+    issueDate: r.issue_date, dueDate: r.due_date, outstanding: Math.round(left(r) * 100) / 100, imported: r.imported,
+  });
+  const remindable = rows.filter((r) => r.status === "sent" && left(r) > 0.005);
+  const lastReminders = remindable.map((r) => r.last_reminder_at).filter(Boolean).sort() as string[];
+  const remindVendor = { last: lastReminders.pop() ?? null };
   const listReceived = sumReceived(rows);
   const listOpen = sum(rows);
 
   const tab = (v: View, label: string) => (
-    <Link href={`/hr/payments?view=${v}${v === "open" ? "" : `&month=${month.slice(0, 7)}`}`} className={view === v ? "on" : ""} aria-current={view === v ? "page" : undefined}>{label}</Link>
+    <Link href={`/hr/payments?view=${v}${v === "open" ? "" : `&month=${month.slice(0, 7)}`}${vq}`} className={view === v ? "on" : ""} aria-current={view === v ? "page" : undefined}>{label}</Link>
   );
   const title = view === "open" ? "All unpaid invoices" : view === "due" ? `Payments expected in ${monthLabel(month)}` : `Invoices for work in ${monthLabel(month)}`;
 
@@ -101,13 +114,30 @@ export default async function Payments({ searchParams }: { searchParams: Promise
               {rows.length} invoice{rows.length === 1 ? "" : "s"} · <span style={{ color: "#15803d" }}>{money(listReceived)} received</span> · <strong>{money(listOpen)} not received</strong>
             </p>
           </div>
-          {view !== "open" && <MonthPicker base="/hr/payments" month={month} current={today} query={`view=${view}`} />}
+          {view !== "open" && <MonthPicker base="/hr/payments" month={month} current={today} query={`view=${view}${vq}`} />}
         </div>
-        <nav className="pay-views" aria-label="Show">
-          {tab("worked", "By month worked")}
-          {tab("due", "By expected date")}
-          {tab("open", "All unpaid")}
-        </nav>
+        <div className="pay-toolbar">
+          <nav className="pay-views" aria-label="Show">
+            {tab("worked", "By month worked")}
+            {tab("due", "By expected date")}
+            {tab("open", "All unpaid")}
+          </nav>
+          <VendorFilter vendors={vendorList} value={vendorId} base={`/hr/payments?view=${view}${view === "open" ? "" : `&month=${month.slice(0, 7)}`}`} />
+        </div>
+        {vendorId && remindable.length > 0 && (
+          <div className="pay-remind">
+            <span>
+              <strong>{remindable.length} unpaid invoice{remindable.length === 1 ? "" : "s"}</strong> from {vendorList.find((v) => v.id === vendorId)?.name} here,{" "}
+              <strong>{money(sum(remindable))}</strong> outstanding{remindVendor?.last ? ` · last reminder ${nice(remindVendor.last.slice(0, 10))}` : ""}.
+            </span>
+            <RemindVendorButton
+              ids={remindable.map((r) => r.id)}
+              vendor={remindable[0].stagity_vendors.name}
+              to={[remindable[0].stagity_vendors.ap_email, remindable[0].stagity_vendors.cc_emails].filter(Boolean).join(", ")}
+              preview={paymentReminderLines(remindable[0].stagity_vendors.name, remindable.map(toItem), today)}
+            />
+          </div>
+        )}
 
         {rows.length ? (
           <div className="i9-table-wrap">
@@ -168,6 +198,16 @@ export default async function Payments({ searchParams }: { searchParams: Promise
                           <MarkPaidButton id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={noAmount(r) && r.due_date && r.due_date < today ? r.due_date : today} remaining={expectedAmount(Number(r.total), r.stagity_vendors.vms_fee_pct)} noAmount={noAmount(r)} />
                         ) : (
                           <UndoReceived id={r.id} number={r.number} />
+                        )}
+                        {r.status === "sent" && left(r) > 0.005 && r.due_date && r.due_date < today && (
+                          <RemindVendorButton
+                            ids={[r.id]}
+                            vendor={r.stagity_vendors.name}
+                            to={[r.stagity_vendors.ap_email, r.stagity_vendors.cc_emails].filter(Boolean).join(", ")}
+                            preview={paymentReminderLines(r.stagity_vendors.name, [toItem(r)], today)}
+                            label={r.last_reminder_at ? `Remind again` : "Remind"}
+                            className="hr-link"
+                          />
                         )}
                         {r.imported && r.issue_date && <EditOldButton id={r.id} number={r.number} issueDate={r.issue_date} total={Number(r.total)} label={noAmount(r) ? "Enter amount" : "Edit"} />}
                       </td>

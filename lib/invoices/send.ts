@@ -193,3 +193,90 @@ export async function sendShortPaymentEmail(id: string, extra = ""): Promise<{ e
   await db().from("stagity_invoices").update({ short_emailed_at: new Date().toISOString() }).eq("id", id);
   return { message: `Emailed ${vendor.ap_email}.` };
 }
+
+// ---------- Payment reminders to vendors ----------
+
+export type ReminderItem = { number: string; consultant: string; period: string; issueDate: string | null; dueDate: string | null; outstanding: number; imported: boolean };
+
+const longDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+/** Professional payment-reminder text (also shown as a preview before sending). */
+export function paymentReminderLines(vendorName: string, items: ReminderItem[], today: string, extra = "") {
+  const total = items.reduce((a, i) => a + i.outstanding, 0);
+  const one = items.length === 1;
+  const line = (i: ReminderItem) => {
+    const late = i.dueDate && i.dueDate < today ? Math.round((Date.parse(`${today}T12:00:00Z`) - Date.parse(`${i.dueDate}T12:00:00Z`)) / 86400_000) : 0;
+    return `• Invoice #${i.number}: ${i.consultant}, ${i.period}${i.issueDate ? `, invoiced ${longDay(i.issueDate)}` : ""}${i.dueDate ? `, due ${longDay(i.dueDate)}` : ""}: ${money(i.outstanding)}${late > 0 ? ` (${late} day${late === 1 ? "" : "s"} past due)` : ""}`;
+  };
+  return [
+    `Dear ${vendorName} Accounts Payable Team,`,
+    "I hope you are doing well.",
+    `This is a friendly reminder that the following invoice${one ? "" : "s"} from Stagity Solutions LLC ${one ? "remains" : "remain"} unpaid as of ${longDay(today)}:`,
+    items.map(line).join("\n"),
+    `Total outstanding: ${money(total)}`,
+    `Could you please confirm the payment status and the expected payment date? If payment has already been sent, kindly share the payment details (date, amount and reference number) so we can match it on our end.`,
+    ...(extra ? [extra] : []),
+    `${items.some((i) => !i.imported) ? `A copy of the invoice${one ? " is" : "s are"} attached for your reference. ` : ""}If you have any questions, please contact us at ${company.invoiceQuestionsEmail} or ${company.phone}.`,
+    "Thank you for your prompt attention to this matter.",
+    "Best regards,",
+  ];
+}
+
+/** Loads unpaid invoices (with an amount) for one vendor, ready for a reminder. */
+export async function reminderItems(ids: string[]) {
+  const { data } = await db()
+    .from("stagity_invoices")
+    .select("id, number, status, period_start, period_end, total, amount_received, adjustment, issue_date, due_date, imported, vendor_id, reminder_count, stagity_people(first_name, last_name), stagity_vendors(*)")
+    .in("id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
+  const rows = (data ?? []).filter((r) => r.status === "sent" && Number(r.total) - Number(r.amount_received) - Number(r.adjustment) > 0.005);
+  return rows.map((r) => {
+    const p = r.stagity_people as unknown as { first_name: string; last_name: string };
+    return {
+      id: r.id as string,
+      vendorId: r.vendor_id as string,
+      vendor: r.stagity_vendors as unknown as Vendor,
+      reminderCount: Number(r.reminder_count ?? 0),
+      item: {
+        number: r.number as string,
+        consultant: `${p.first_name} ${p.last_name}`,
+        period: periodLabel(r.period_start, r.period_end),
+        issueDate: r.issue_date as string | null,
+        dueDate: r.due_date as string | null,
+        outstanding: Math.round((Number(r.total) - Number(r.amount_received) - Number(r.adjustment)) * 100) / 100,
+        imported: !!r.imported,
+      } as ReminderItem,
+    };
+  });
+}
+
+export async function sendPaymentReminder(ids: string[], extra = ""): Promise<{ error?: string; message?: string }> {
+  const rows = await reminderItems(ids);
+  if (!rows.length) return { error: "Nothing unpaid to remind about (enter the amount for old invoices first)." };
+  const vendorIds = new Set(rows.map((r) => r.vendorId));
+  if (vendorIds.size > 1) return { error: "Choose one vendor at a time." };
+  const vendor = rows[0].vendor;
+  if (!vendor.ap_email) return { error: `${vendor.name} has no email on file. Add it on the Vendors page.` };
+  const today = todayCT();
+  // Attach the PDFs of invoices sent from the portal.
+  const attachments: { filename: string; content: Uint8Array; contentType?: string }[] = [];
+  for (const r of rows.filter((x) => !x.item.imported)) {
+    const loaded = await loadInvoice(r.id);
+    if (loaded) attachments.push({ filename: `Invoice ${r.item.number}.pdf`, content: await buildInvoicePdf({ ...(await pdfData(loaded)), draft: false }), contentType: "application/pdf" });
+  }
+  const one = rows.length === 1;
+  const total = rows.reduce((a, r) => a + r.item.outstanding, 0);
+  const cc = (vendor.cc_emails ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+  const ok = await send(
+    vendor.ap_email.split(/,\s*/).filter(Boolean).join(", "),
+    one
+      ? `Payment reminder: Invoice #${rows[0].item.number} (${rows[0].item.consultant}, ${rows[0].item.period})`
+      : `Payment reminder: ${rows.length} outstanding invoices from Stagity Solutions LLC (${money(total)})`,
+    paymentReminderLines(vendor.name, rows.map((r) => r.item), today, extra),
+    undefined,
+    { cc, bcc: [company.accountsEmail], from: "accounts", replyTo: company.invoiceQuestionsEmail, attachments },
+  );
+  if (!ok) return { error: "The email couldn't be sent. Check the email settings and try again." };
+  const now = new Date().toISOString();
+  for (const r of rows) await db().from("stagity_invoices").update({ last_reminder_at: now, reminder_count: r.reminderCount + 1 }).eq("id", r.id);
+  return { message: `Reminder sent to ${vendor.ap_email} for ${rows.length} invoice${one ? "" : "s"} (${money(total)}).` };
+}

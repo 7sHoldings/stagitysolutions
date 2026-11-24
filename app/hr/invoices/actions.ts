@@ -7,7 +7,7 @@ import { approveAndSend } from "@/lib/invoices/send";
 import { requestInvoiceReviews } from "@/lib/invoices/auto";
 import { todayCT } from "@/lib/portal/dates";
 import { round2, settle } from "@/lib/invoices/payments";
-import { sendShortPaymentEmail } from "@/lib/invoices/send";
+import { sendPaymentReminder, sendShortPaymentEmail } from "@/lib/invoices/send";
 import type { ActionState } from "../actions";
 
 const clip = (v: FormDataEntryValue | null, max = 500) => String(v ?? "").trim().slice(0, max);
@@ -193,4 +193,15 @@ export async function checkReadyNow(_prev: ActionState): Promise<ActionState> {
   if (r.failed.length) return { error: `Couldn't email the review for: ${r.failed.join("; ")}. Check the email settings.` };
   if (r.notified.length) return { ok: true, message: `Ready for review (email sent to the team): ${r.notified.join(", ")}.` };
   return { ok: true, message: r.waiting ? `Nothing new is ready. ${r.waiting} draft${r.waiting === 1 ? " is" : "s are"} still waiting for approved timesheets or the end of the month.` : "Nothing new is ready." };
+}
+
+/** Emails one vendor a payment reminder for the selected unpaid invoices. */
+export async function remindVendor(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const hr = await requireHr();
+  const ids = clip(formData.get("ids"), 4000).split(",").filter((x) => /^[0-9a-f-]{36}$/.test(x));
+  const r = await sendPaymentReminder(ids, clip(formData.get("message"), 1500));
+  if (r.error) return { error: r.error };
+  await audit(null, `hr:${hr}`, "vendor_payment_reminder", { invoices: ids });
+  refresh();
+  return { ok: true, message: r.message };
 }
