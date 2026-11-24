@@ -152,3 +152,44 @@ export async function approveAndSend(id: string, hr: string): Promise<{ error?: 
   await audit(null, `hr:${hr}`, "invoice_sent", { invoiceId: id, number, total: inv.total, to: vendor.ap_email });
   return { message: `Invoice ${number} sent to ${[vendor.ap_email, ...cc].join(", ")}.` };
 }
+
+/** Body lines of the short-payment email (also shown as a preview before sending). */
+export function shortPaymentLines(o: { consultant: string; number: string; period: string; total: number; received: number; payments: { amount: number; received_on: string }[]; extra?: string }) {
+  const diff = Math.round((o.total - o.received) * 100) / 100;
+  return [
+    "Hello,",
+    `This is regarding invoice #${o.number} for ${o.consultant} (${o.period}).`,
+    [
+      `Invoice amount: ${money(o.total)}`,
+      ...o.payments.map((p) => `Payment received on ${mdY(p.received_on)}: ${money(Number(p.amount))}`),
+      `Short by: ${money(diff)}`,
+    ].join("\n"),
+    `The payment we received is ${money(diff)} less than the invoice amount. Could you please check and send the remaining balance, or let us know the reason for the difference (for example, any fee or deduction)?`,
+    ...(o.extra ? [o.extra] : []),
+    "A copy of the invoice is attached for reference. Thank you.",
+    "Thanks & Regards,",
+  ];
+}
+
+export async function sendShortPaymentEmail(id: string, extra = ""): Promise<{ error?: string; message?: string }> {
+  const loaded = await loadInvoice(id);
+  if (!loaded) return { error: "Invoice not found." };
+  const { inv, vendor, person } = loaded;
+  const { data: pays } = await db().from("stagity_invoice_payments").select("amount, received_on").eq("invoice_id", id).order("received_on");
+  const received = (pays ?? []).reduce((a, p) => a + Number(p.amount), 0);
+  if (inv.status !== "sent" || received <= 0 || received >= Number(inv.total) - 0.005) return { error: "This invoice isn't short-paid." };
+  const consultant = `${person.first_name} ${person.last_name}`;
+  const period = periodLabel(inv.period_start, inv.period_end);
+  const pdf = await buildInvoicePdf({ ...(await pdfData(loaded)), draft: false });
+  const cc = (vendor.cc_emails ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+  const ok = await send(
+    vendor.ap_email.split(/,\s*/).filter(Boolean).join(", "),
+    `Short payment: ${consultant} invoice #${inv.number} (${period})`,
+    shortPaymentLines({ consultant, number: inv.number, period, total: Number(inv.total), received, payments: pays ?? [], extra }),
+    undefined,
+    { cc, bcc: [company.accountsEmail], from: "accounts", replyTo: company.invoiceQuestionsEmail, attachments: [{ filename: `Invoice ${inv.number}.pdf`, content: pdf, contentType: "application/pdf" }] },
+  );
+  if (!ok) return { error: "The email couldn't be sent. Check the email settings and try again." };
+  await db().from("stagity_invoices").update({ short_emailed_at: new Date().toISOString() }).eq("id", id);
+  return { message: `Emailed ${vendor.ap_email}.` };
+}

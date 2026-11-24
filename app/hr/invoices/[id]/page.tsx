@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db, requireHr } from "@/lib/i9/server";
 import { periodCompleteness } from "@/lib/invoices/server";
-import { loadInvoice } from "@/lib/invoices/send";
-import { money, sheetLabel, shortDate, todayCT } from "@/lib/portal/dates";
+import { loadInvoice, periodLabel, shortPaymentLines } from "@/lib/invoices/send";
+import { addDays, money, sheetLabel, shortDate, todayCT } from "@/lib/portal/dates";
 import HrNav from "../../HrNav";
 import BackLink from "../../BackLink";
-import { DraftEditForm, PaidForm, SendButton, UnpaidButton, VoidForm } from "../forms";
+import { DraftEditForm, MarkPaidButton, SendButton, ShortPayActions, UnpaidButton, VoidForm } from "../forms";
 
 const label: Record<string, string> = { draft: "Draft", sent: "Sent", paid: "Paid", void: "Void" };
 const cls: Record<string, string> = { draft: "s-section1_complete", sent: "s-everify_submitted", paid: "s-closed", void: "s-cancelled" };
@@ -30,6 +30,11 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     weeks.set(w, cur);
   }
   const draft = inv.status === "draft";
+  const { data: payRows } = await db().from("stagity_invoice_payments").select("id, amount, received_on, note").eq("invoice_id", id).order("received_on");
+  const payments = payRows ?? [];
+  const received = payments.reduce((a, p) => a + Number(p.amount), 0);
+  const short = Math.round((Number(inv.total) - received - Number(inv.adjustment ?? 0)) * 100) / 100;
+  const firstPay = payments[0]?.received_on as string | undefined;
   const consultant = `${person.first_name} ${person.last_name}`;
 
   return (
@@ -95,20 +100,51 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           <SendButton id={id} vendor={vendor.name} total={money(Number(inv.total))} to={[vendor.ap_email, vendor.cc_emails].filter(Boolean).join(", ")} />
         </div>
       )}
-      {inv.status === "paid" && (
-        <div className="form-card">
-          <h2 className="i9-h3">Paid{inv.paid_at ? ` on ${inv.paid_at}` : ""}</h2>
-          <UnpaidButton id={id} />
-        </div>
-      )}
-      {inv.status === "sent" && (
+      {(inv.status === "sent" || inv.status === "paid") && (
         <div className="form-card">
           <h2 className="i9-h3">Payment</h2>
-          <PaidForm id={id} today={todayCT()} />
-          <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 14, marginTop: 6 }}>
-            <p className="muted i9-small" style={{ margin: "0 0 8px" }}>Sent by mistake or with wrong hours?</p>
-            <VoidForm id={id} />
+          {payments.length ? (
+            <table className="i9-table" style={{ marginBottom: 6 }}>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id}><td>Received {p.received_on}{p.note ? <span className="muted i9-small"> · {p.note}</span> : null}</td><td className="i9-num">{money(Number(p.amount))}</td></tr>
+                ))}
+                {Number(inv.adjustment) > 0 && <tr><td>Accepted difference ({inv.adjustment_reason})</td><td className="i9-num">{money(Number(inv.adjustment))}</td></tr>}
+                <tr><td><strong>{inv.status === "paid" ? "Paid in full" : short > 0 && received > 0 ? "Short" : "Still to receive"}</strong></td><td className="i9-num"><strong>{inv.status === "paid" ? "✓" : money(short)}</strong></td></tr>
+              </tbody>
+            </table>
+          ) : (
+            <p className="muted">Nothing received yet{inv.due_date ? `; expected by ${inv.due_date}` : ""}.</p>
+          )}
+          {inv.status === "sent" && received > 0 && (
+            <p className="ack-warn">
+              <strong>Short-paid by {money(short)}.</strong>{" "}
+              {inv.short_emailed_at ? `You emailed ${vendor.name} about it on ${new Date(inv.short_emailed_at).toLocaleDateString("en-US", { timeZone: "America/Chicago" })}. ` : ""}
+              {vendor.dispute_days ? `Their agreement says to report a discrepancy within ${vendor.dispute_days} days of the payment (by ${addDays(firstPay!, vendor.dispute_days)}).` : ""}
+            </p>
+          )}
+          <div className="btn-row" style={{ alignItems: "center" }}>
+            {inv.status === "sent" && (
+              <MarkPaidButton id={id} number={inv.number} amount={money(Number(inv.total))} vendor={vendor.name} today={todayCT()} remaining={short} label={received > 0 ? "Record another payment" : "Record payment"} />
+            )}
+            {inv.status === "sent" && received > 0 && (
+              <ShortPayActions
+                id={id}
+                diff={money(short)}
+                vendor={vendor.name}
+                to={[vendor.ap_email, vendor.cc_emails].filter(Boolean).join(", ")}
+                emailedAt={inv.short_emailed_at ?? null}
+                preview={shortPaymentLines({ consultant, number: inv.number, period: periodLabel(inv.period_start, inv.period_end), total: Number(inv.total), received, payments })}
+              />
+            )}
           </div>
+          {payments.length > 0 && <UnpaidButton id={id} />}
+          {inv.status === "sent" && (
+            <div style={{ borderTop: "1px solid #e5e7eb", paddingTop: 14, marginTop: 6 }}>
+              <p className="muted i9-small" style={{ margin: "0 0 8px" }}>Sent by mistake or with wrong hours?</p>
+              <VoidForm id={id} />
+            </div>
+          )}
         </div>
       )}
     </section>

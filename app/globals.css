@@ -781,3 +781,4 @@ a.pay-sum:hover .hr-sum-n { text-decoration: underline; }
   .pay-table td.pay-act { grid-column: 2; justify-self: end; }
   .pay-table tr.pay-overdue { background: #fffafa; }
 }
+.pay-short { background: #fffbeb; color: #b45309; }

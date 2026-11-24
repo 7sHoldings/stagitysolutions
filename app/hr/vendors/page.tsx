@@ -49,6 +49,7 @@ export default async function Vendors() {
                       <>
                         <span className="hr-chip">{v.billing_cycle === "weekly" ? "Weekly invoice" : "Monthly invoice"}</span>
                         <span className="hr-chip">Net {v.payment_terms_days} default</span>
+                        {v.vms_fee_pct ? <span className="hr-chip">{Number(v.vms_fee_pct)}% VMS fee</span> : null}
                       </>
                     )}
                     <span className="hr-chip">{list.length} consultant{list.length === 1 ? "" : "s"}</span>

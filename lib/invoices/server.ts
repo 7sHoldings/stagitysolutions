@@ -5,7 +5,7 @@ import { addDays, monthEnd, monthStart, weekStartOf, periodFor, round2, todayCT 
 
 export type Vendor = {
   id: string; name: string; ap_email: string; cc_emails: string | null; address: string | null;
-  payment_terms_days: number; billing_cycle: "weekly" | "monthly"; attach_timesheets: boolean; active: boolean; notes: string | null;
+  payment_terms_days: number; billing_cycle: "weekly" | "monthly"; attach_timesheets: boolean; active: boolean; notes: string | null; vms_fee_pct?: number | null; dispute_days?: number | null;
 };
 
 export type Invoice = {
@@ -14,6 +14,7 @@ export type Invoice = {
   total: number; po_number: string | null; notes: string | null; issue_date: string | null; due_date: string | null;
   sent_at: string | null; sent_by: string | null; sent_to: string | null; paid_at: string | null; voided_reason: string | null;
   review_requested_at?: string | null;
+  amount_received?: number; adjustment?: number; adjustment_reason?: string | null; short_emailed_at?: string | null;
 };
 
 export const isDraftNumber = (n: string) => n.startsWith("DRAFT-");

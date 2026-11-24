@@ -24,7 +24,11 @@ export async function saveVendor(_prev: ActionState, formData: FormData): Promis
     active: id ? formData.get("active") === "on" : true,
     notes: clip(formData.get("notes"), 1000) || null,
     send_invoices: formData.get("sendInvoices") === "on",
+    vms_fee_pct: clip(formData.get("vmsPct"), 6) ? Number(clip(formData.get("vmsPct"), 6)) : null,
+    dispute_days: clip(formData.get("disputeDays"), 4) ? Number(clip(formData.get("disputeDays"), 4)) : null,
   };
+  if (row.vms_fee_pct !== null && (!Number.isFinite(row.vms_fee_pct) || row.vms_fee_pct < 0 || row.vms_fee_pct >= 50)) return { error: "VMS fee must be a percent between 0 and 49." };
+  if (row.dispute_days !== null && (!Number.isInteger(row.dispute_days) || row.dispute_days < 0 || row.dispute_days > 365)) return { error: "Enter the number of days (0–365)."};
   if (!row.name) return { error: "Enter the vendor name." };
   if (row.send_invoices && !row.ap_email) return { error: "Enter the vendor email(s) for invoices, separated by commas." };
   if (row.ap_email && !row.ap_email.split(", ").every(emailOk)) return { error: "Check the vendor email(s), separated by commas." };

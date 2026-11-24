@@ -8,7 +8,7 @@ import { CheckNowButton, MarkPaidButton, SendButton } from "./forms";
 
 type Row = {
   id: string; number: string; status: string; period_start: string; period_end: string; total: number; regular_hours: number;
-  overtime_hours: number; due_date: string | null; sent_at: string | null; paid_at: string | null; person_id: string;
+  overtime_hours: number; due_date: string | null; sent_at: string | null; paid_at: string | null; amount_received: number; person_id: string;
   stagity_people: { first_name: string; last_name: string; client_name: string | null };
   stagity_vendors: { name: string };
 };
@@ -21,7 +21,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
   const [{ data }, { data: consultants }] = await Promise.all([
     db()
       .from("stagity_invoices")
-      .select("id, number, status, period_start, period_end, total, regular_hours, overtime_hours, due_date, sent_at, paid_at, person_id, stagity_people(first_name, last_name, client_name), stagity_vendors(name)")
+      .select("id, number, status, period_start, period_end, total, regular_hours, overtime_hours, due_date, sent_at, paid_at, amount_received, person_id, stagity_people(first_name, last_name, client_name), stagity_vendors(name)")
       .neq("status", "void")
       .order("period_start", { ascending: false })
       .limit(500),
@@ -154,7 +154,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
                       ) : inv ? (
                         <div className="btn-row" style={{ justifyContent: "flex-end" }}>
                           {done.filter((r) => r.status === "sent").map((r) => (
-                            <MarkPaidButton key={r.id} id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={today} />
+                            <MarkPaidButton key={r.id} id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={today} remaining={Number(r.total) - Number(r.amount_received)} />
                           ))}
                           <Link className="btn btn-outline hr-btn-xs" href={`/hr/invoices/${inv.id}`}>Open</Link>
                         </div>
@@ -217,7 +217,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
                   <td className="i9-num"><strong>{money(Number(r.total))}</strong></td>
                   <td>{r.sent_at ? shortDate(todayCT(new Date(r.sent_at))) : "—"}</td>
                   <td>{r.due_date && r.due_date < today ? <span className="i9-dot late">overdue · {shortDate(r.due_date)}</span> : r.due_date ? shortDate(r.due_date) : "—"}</td>
-                  <td className="hr-td-actions"><MarkPaidButton id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={today} /></td>
+                  <td className="hr-td-actions"><MarkPaidButton id={r.id} number={r.number} amount={money(Number(r.total))} vendor={r.stagity_vendors.name} today={today} remaining={Number(r.total) - Number(r.amount_received)} /></td>
                 </tr>
               ))}
               {!sent.length && <tr><td colSpan={7} className="muted">Nothing awaiting payment.</td></tr>}

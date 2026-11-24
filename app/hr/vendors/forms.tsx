@@ -7,7 +7,7 @@ import { Status } from "../forms";
 import { ConfirmAction, ModalButton } from "../Modal";
 import type { ActionState } from "../actions";
 
-type V = Partial<{ id: string; send_invoices: boolean; name: string; ap_email: string; cc_emails: string | null; address: string | null; payment_terms_days: number; billing_cycle: string; attach_timesheets: boolean; active: boolean; notes: string | null }>;
+type V = Partial<{ id: string; send_invoices: boolean; vms_fee_pct: number | null; dispute_days: number | null; name: string; ap_email: string; cc_emails: string | null; address: string | null; payment_terms_days: number; billing_cycle: string; attach_timesheets: boolean; active: boolean; notes: string | null }>;
 type Person = { id: string; name: string };
 export type Assigned = Person & {
   pay_rate: number | null; bill_rate: number | null; client_name: string | null;
@@ -68,6 +68,10 @@ export function VendorForm({ v, close, consultants = [] }: { v?: V; close?: () =
       <div className="form-grid">
         <label className="field"><L t="CC" hint="optional" /><input name="ccEmails" defaultValue={v?.cc_emails ?? ""} /></label>
         <label className="field"><L t="Payment terms (days after invoice date)" hint="e.g. 45 = Net 45" /><input name="terms" type="number" min={0} max={180} defaultValue={v?.payment_terms_days ?? 30} /></label>
+      </div>
+      <div className="form-grid">
+        <label className="field"><L t="VMS / admin fee (%)" hint="empty if none" /><input name="vmsPct" type="number" step="0.01" min={0} max={49} defaultValue={v?.vms_fee_pct ?? ""} placeholder="e.g. 2.5" /></label>
+        <label className="field"><L t="Report payment problems within (days)" hint="from the agreement, optional" /><input name="disputeDays" type="number" min={0} max={365} defaultValue={v?.dispute_days ?? ""} placeholder="e.g. 30" /></label>
       </div>
       <label className="field"><L t="Billing address" /><textarea name="address" defaultValue={v?.address ?? ""} rows={3} style={{ minHeight: 84 }} placeholder={"16803 Dallas Parkway, Suite 300\nAddison, TX 75001"} /></label>
       {!isNew && <label className="i9-check"><input type="checkbox" name="active" defaultChecked={v?.active ?? true} /> Active</label>}
