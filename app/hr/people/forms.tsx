@@ -73,6 +73,7 @@ export function RegisterForm({ close }: { close?: () => void }) {
         <span>Finish sign-up by<span className="field-hint"> (daily reminder until then)</span></span>
         <input type="date" name="signupDue" defaultValue={inDays(7)} />
       </label>
+      <label className="i9-check"><input type="checkbox" name="startOnboarding" defaultChecked /> Start onboarding (Personal Information, W-4, direct deposit, documents, company documents to sign)</label>
       <label className="i9-check"><input type="checkbox" name="startI9" defaultChecked /> Start their Form I-9 now (uses the start date as the first day of work)</label>
       <Status s={s} />
       <div className="hr-modal-actions">

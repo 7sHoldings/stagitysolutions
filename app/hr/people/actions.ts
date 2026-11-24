@@ -7,6 +7,8 @@ import { sendI9Task, sendWelcome } from "@/lib/i9/mail";
 import { hashPassword, tempPassword, TS_BUCKET } from "@/lib/portal/server";
 import type { ActionState } from "../actions";
 import { addDays, todayCT } from "@/lib/portal/dates";
+import { startFor } from "@/lib/onboarding/start";
+import { OB_BUCKET } from "@/lib/onboarding/server";
 import { recomputeDraft, syncDraftInvoices } from "@/lib/invoices/server";
 
 const clip = (v: FormDataEntryValue | null, max = 200) => String(v ?? "").trim().slice(0, max);
@@ -163,9 +165,14 @@ export async function registerPerson(_prev: ActionState, formData: FormData): Pr
   }
 
   const wantsI9 = formData.get("startI9") === "on";
+  const wantsOnboarding = formData.get("startOnboarding") === "on";
+  if (wantsOnboarding) {
+    const { data: defaults } = await db().from("stagity_doc_templates").select("id").eq("active", true).eq("default_for_new", true);
+    await startFor([p.id], (defaults ?? []).map((t) => t.id), signupDue ?? addDays(todayCT(), 7), false, hr);
+  }
   if (wantsI9) await openI9(p.id, hr, p, d.start_date);
   const pw = await issueTempPassword(p.id);
-  const tasks = [...(wantsI9 ? ["complete your Form I-9"] : []), ...(d.kind === "consultant" ? ["submit your weekly timesheets"] : [])];
+  const tasks = [...(wantsOnboarding ? ["complete your new-hire paperwork (W-4, direct deposit, documents)"] : []), ...(wantsI9 ? ["complete your Form I-9"] : []), ...(d.kind === "consultant" ? ["submit your weekly timesheets"] : [])];
   const sent = await sendWelcome(email, d.first_name, pw, `${siteOrigin()}/portal/login`, tasks);
   revalidatePath("/hr/people");
   return {
@@ -324,6 +331,12 @@ export async function deletePerson(_prev: ActionState, formData: FormData): Prom
     const { data: docs } = await db().from("stagity_i9_documents").select("storage_path").in("case_id", i9Ids);
     if (docs?.length) await db().storage.from(I9_BUCKET).remove(docs.map((d) => d.storage_path));
   }
+  const [{ data: obFiles }, { data: obSigs }] = await Promise.all([
+    db().from("stagity_onboarding_files").select("storage_path").eq("person_id", id),
+    db().from("stagity_signatures").select("source_path, signed_path").eq("person_id", id),
+  ]);
+  const obPaths = [...(obFiles ?? []).map((f) => f.storage_path), ...(obSigs ?? []).flatMap((x) => [x.signed_path, x.source_path.startsWith("people/") ? x.source_path : null])].filter(Boolean) as string[];
+  if (obPaths.length) await db().storage.from(OB_BUCKET).remove(obPaths);
   await db().from("stagity_timesheet_days").update({ invoice_id: null, payroll_run_id: null }).eq("person_id", id);
   await db().from("stagity_invoices").delete().eq("person_id", id).eq("status", "draft");
   await db().from("stagity_payroll_items").delete().eq("person_id", id);

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/i9/server";
 import { requirePerson } from "@/lib/portal/server";
+import { onboardingSteps } from "@/lib/onboarding/server";
 import { addMonths, dayName, deadlineFor, monthLabel, monthStart, payDateFor, periodFor, periodsInMonth, shortDate, submitFrom, todayCT, type Period } from "@/lib/portal/dates";
 
 const rangeLabel = (x: Period) => (x.start === x.end ? `${dayName(x.start)} ${shortDate(x.start)}` : `${dayName(x.start)} ${shortDate(x.start)} – ${dayName(x.end)} ${shortDate(x.end)}`);
@@ -11,6 +12,7 @@ const tsClass: Record<string, string> = { draft: "s-invited", submitted: "s-ever
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ submitted?: string; welcome?: string }> }) {
   const p = await requirePerson();
   const { submitted, welcome } = await searchParams;
+  const onboarding = await onboardingSteps(p.id);
   const today = todayCT();
   const { data: i9 } = await db()
     .from("stagity_i9_cases")
@@ -55,6 +57,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         <p className="form-status ok" role="status">
           ✓ Your timesheet for {rangeLabel(periodFor(submitted))} was submitted. HR will review it and you&apos;ll get an email when it&apos;s approved.
         </p>
+      )}
+
+      {onboarding && !onboarding.complete && (
+        <Link href="/portal/onboarding" className="i9-task">
+          <strong>Finish your new-hire paperwork</strong>
+          <span>{onboarding.done} of {onboarding.total} done · W-4, direct deposit, documents and signatures →</span>
+        </Link>
       )}
 
       {i9?.status === "invited" && (

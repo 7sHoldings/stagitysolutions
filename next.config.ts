@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
   // Ship files the HR portal reads at runtime (blank USCIS Form I-9, logo for invoice PDFs).
   outputFileTracingIncludes: {
     "/hr/cases/[id]/pdf": ["./lib/i9/assets/i-9.pdf"],
+    "/hr/onboarding/[id]/pdf": ["./lib/onboarding/assets/*.pdf"],
     "/hr/**/*": ["./public/logo.png"],
   },
   images: {

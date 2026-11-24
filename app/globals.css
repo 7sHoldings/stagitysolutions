@@ -819,3 +819,25 @@ a.pay-sum:hover .hr-sum-n { text-decoration: underline; }
   .pay-table td.pay-act { grid-column: 1 / -1 !important; justify-self: start !important; display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
   .pay-table tr { grid-template-columns: minmax(0, 1fr) auto; }
 }
+
+/* Employee onboarding */
+.ob-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ob-steps li { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.ob-steps li.next { border-color: #93c5fd; box-shadow: 0 0 0 3px #eff6ff; }
+.ob-steps li.done { background: #f8fafc; }
+.ob-num { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px; background: #e5e7eb; font-weight: 700; font-size: 14px; color: #374151; }
+.ob-steps li.done .ob-num { background: #dcfce7; color: #15803d; }
+.ob-steps li.next .ob-num { background: #1259d6; color: #fff; }
+.ob-label { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.ob-form { display: grid; gap: 18px; }
+.ob-sign { padding: 14px 16px; border-radius: 12px; background: #f8fafc; border: 1px solid var(--line); display: grid; gap: 12px; }
+.ob-doc-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.ob-doc-row.missing { border-color: #fcd34d; background: #fffdf5; }
+.ob-files { display: flex; flex-wrap: wrap; gap: 6px; }
+.ob-file { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px; border-radius: 999px; background: #f1f5f9; }
+.ob-frame { width: 100%; height: 70vh; min-height: 420px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafc; }
+@media (max-width: 640px) { .ob-steps li { flex-wrap: wrap; } .ob-steps li .btn { width: 100%; justify-content: center; } }
+.ob-pick { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.ob-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ob-chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; }
+.ob-chip.done { background: #dcfce7; color: #166534; }

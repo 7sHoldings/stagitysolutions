@@ -9,6 +9,7 @@ import { ensureDraftRun, gross, payrollCsv } from "@/lib/portal/payroll";
 import { requestInvoiceReviews } from "@/lib/invoices/auto";
 import { sendSignupReminder } from "@/lib/i9/mail";
 import { sendAnnouncement, type AckRow } from "@/lib/announce";
+import { FILE_KINDS, onboardingSteps, sendOnboardingReminder } from "@/lib/onboarding/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -200,6 +201,43 @@ export async function GET(req: Request) {
       .lt("sent_at", `${today}T06:00:00Z`); // at most once a day
     for (const r of (pending ?? []) as AckRow[]) {
       if (await sendAnnouncement(r, "automatic")) log.push(`ack-reminder:${r.email}`);
+    }
+  }
+
+  // ---- 7. Onboarding: daily reminder until the due date (only once they've signed in), and document-expiry alerts to HR ----
+  {
+    const { data: obs } = await db()
+      .from("stagity_onboarding")
+      .select("person_id, due_date, stagity_people!inner(first_name, email, active, must_change_password)")
+      .is("completed_at", null)
+      .gte("due_date", today)
+      .lt("started_at", `${today}T06:00:00Z`);
+    for (const o of obs ?? []) {
+      const p = o.stagity_people as unknown as { first_name: string; email: string | null; active: boolean; must_change_password: boolean };
+      if (!p.active || !p.email || p.must_change_password || needs.has(o.person_id)) continue; // sign-up reminders cover people who haven't signed in
+      const st = await onboardingSteps(o.person_id);
+      if (!st || st.complete) continue;
+      if (!(await once(o.person_id, "onboarding-reminder", today))) continue;
+      await sendOnboardingReminder(p.email, p.first_name, o.due_date!, st.steps.filter((x) => !x.done).map((x) => x.label));
+      log.push(`onboarding-reminder:${p.email}`);
+    }
+    // Work documents expiring in 60, 30 or 7 days → one email to hr@ listing them.
+    const soon = await db()
+      .from("stagity_onboarding_files")
+      .select("id, kind, expires_on, person_id, stagity_people!inner(first_name, last_name, active)")
+      .not("expires_on", "is", null)
+      .lte("expires_on", addDays(today, 60))
+      .gte("expires_on", today);
+    const due = (soon.data ?? []).filter((f) => [60, 30, 7].includes(Math.round((Date.parse(`${f.expires_on}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / 86400_000)));
+    if (due.length && (await once(null, "document-expiry", today))) {
+      await send(company.email, `${due.length} employee document${due.length === 1 ? "" : "s"} expiring soon`, [
+        "These employee documents expire soon. Ask for renewed copies (and re-verify the Form I-9 if it's work authorization):",
+        due.map((f) => {
+          const p = f.stagity_people as unknown as { first_name: string; last_name: string };
+          return `• ${p.first_name} ${p.last_name}: ${FILE_KINDS[f.kind] ?? f.kind} expires ${f.expires_on}`;
+        }).join("\n"),
+      ], { label: "Open onboarding", href: `${siteOrigin()}/hr/onboarding` }, { signature: "Stagity Solutions Portal" });
+      log.push(`document-expiry:${due.length}`);
     }
   }
 

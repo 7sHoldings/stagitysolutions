@@ -4,6 +4,7 @@ import { signOut } from "./login/actions";
 const tabs = [
   { href: "/hr", label: "Overview" },
   { href: "/hr/people", label: "People" },
+  { href: "/hr/onboarding", label: "Onboarding" },
   { href: "/hr/vendors", label: "Vendors" },
   { href: "/hr/timesheets", label: "Timesheets" },
   { href: "/hr/invoices", label: "Invoices" },
