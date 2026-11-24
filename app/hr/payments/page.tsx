@@ -26,6 +26,8 @@ export default async function Payments({ searchParams }: { searchParams: Promise
   const q = await searchParams;
   const today = todayCT();
   const view: View = q.view === "due" ? "due" : q.view === "open" ? "open" : "worked";
+  // "All months": chosen in the month menu, or automatically when a vendor is picked without a month.
+  const allMonths = q.month === "all" || (!!q.vendor && !q.month);
   const month = q.month && /^\d{4}-\d{2}$/.test(q.month) ? `${q.month}-01` : view === "due" ? monthStart(today) : addMonths(monthStart(today), -1);
 
   const { data } = await db()
@@ -62,10 +64,11 @@ export default async function Payments({ searchParams }: { searchParams: Promise
   const inMonth = (d: string | null) => !!d && d >= month && d <= monthEnd(month);
   const rows =
     view === "open" ? open
+    : allMonths ? [...all]
     : view === "due" ? all.filter((r) => inMonth(r.due_date))
     : all.filter((r) => r.period_start <= monthEnd(month) && r.period_end >= month);
   if (vendorId) rows.splice(0, rows.length, ...rows.filter((r) => r.vendor_id === vendorId));
-  rows.sort((a, b) => Number(a.status === "paid") - Number(b.status === "paid") || String(a.due_date).localeCompare(String(b.due_date)));
+  rows.sort((a, b) => Number(a.status === "paid") - Number(b.status === "paid") || String(a.due_date).localeCompare(String(b.due_date)) || a.stagity_people.last_name.localeCompare(b.stagity_people.last_name));
   const toItem = (r: Row) => ({
     number: r.number, consultant: `${r.stagity_people.first_name} ${r.stagity_people.last_name}`, period: periodLabel(r.period_start, r.period_end),
     issueDate: r.issue_date, dueDate: r.due_date, outstanding: Math.round(left(r) * 100) / 100, imported: r.imported,
@@ -77,9 +80,14 @@ export default async function Payments({ searchParams }: { searchParams: Promise
   const listOpen = sum(rows);
 
   const tab = (v: View, label: string) => (
-    <Link href={`/hr/payments?view=${v}${v === "open" ? "" : `&month=${month.slice(0, 7)}`}${vq}`} className={view === v ? "on" : ""} aria-current={view === v ? "page" : undefined}>{label}</Link>
+    <Link href={`/hr/payments?view=${v}${v === "open" ? "" : `&month=${allMonths ? "all" : month.slice(0, 7)}`}${vq}`} className={view === v ? "on" : ""} aria-current={view === v ? "page" : undefined}>{label}</Link>
   );
-  const title = view === "open" ? "All unpaid invoices" : view === "due" ? `Payments expected in ${monthLabel(month)}` : `Invoices for work in ${monthLabel(month)}`;
+  const vendorName = vendorList.find((v) => v.id === vendorId)?.name;
+  const title =
+    view === "open" ? `All unpaid invoices${vendorName ? `: ${vendorName}` : ""}`
+    : allMonths ? `All invoices${vendorName ? `: ${vendorName}` : ""}`
+    : view === "due" ? `Payments expected in ${monthLabel(month)}`
+    : `Invoices for work in ${monthLabel(month)}`;
 
   return (
     <section className="container hr-page">
@@ -114,7 +122,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
               {rows.length} invoice{rows.length === 1 ? "" : "s"} · <span style={{ color: "#15803d" }}>{money(listReceived)} received</span> · <strong>{money(listOpen)} not received</strong>
             </p>
           </div>
-          {view !== "open" && <MonthPicker base="/hr/payments" month={month} current={today} query={`view=${view}${vq}`} />}
+          {view !== "open" && <MonthPicker base="/hr/payments" month={allMonths ? "all" : month} current={today} query={`view=${view}${vq}`} allowAll />}
         </div>
         <div className="pay-toolbar">
           <nav className="pay-views" aria-label="Show">
@@ -122,7 +130,7 @@ export default async function Payments({ searchParams }: { searchParams: Promise
             {tab("due", "By expected date")}
             {tab("open", "All unpaid")}
           </nav>
-          <VendorFilter vendors={vendorList} value={vendorId} base={`/hr/payments?view=${view}${view === "open" ? "" : `&month=${month.slice(0, 7)}`}`} />
+          <VendorFilter vendors={vendorList} value={vendorId} view={view} />
         </div>
         {vendorId && remindable.length > 0 && (
           <div className="pay-remind">

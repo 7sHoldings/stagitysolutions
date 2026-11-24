@@ -60,13 +60,15 @@ export function UndoReceived({ id, number }: { id: string; number: string }) {
   );
 }
 
-/** Vendor dropdown: keeps the current view and month in the link. */
-export function VendorFilter({ vendors, value, base }: { vendors: { id: string; name: string }[]; value: string; base: string }) {
+/** Vendor dropdown. Picking a vendor shows all their months; "All vendors" goes back to one month. */
+export function VendorFilter({ vendors, value, view }: { vendors: { id: string; name: string }[]; value: string; view: string }) {
   const router = useRouter();
+  const go = (id: string) =>
+    router.push(id ? `/hr/payments?view=${view}${view === "open" ? "" : "&month=all"}&vendor=${id}` : `/hr/payments?view=${view}`);
   return (
     <label className="pay-vendor">
       <span className="muted i9-small">Vendor</span>
-      <select value={value} onChange={(e) => router.push(`${base}${e.target.value ? `&vendor=${e.target.value}` : ""}`)} aria-label="Filter by vendor">
+      <select value={value} onChange={(e) => go(e.target.value)} aria-label="Filter by vendor">
         <option value="">All vendors</option>
         {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
       </select>

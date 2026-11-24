@@ -12,9 +12,10 @@ function shift(ym: string, n: number) {
 }
 
 /** ← [Month ▾] → : arrows for the next/previous month, plus a dropdown to jump to any month. */
-export default function MonthPicker({ base, month, current, query = "" }: { base: string; month: string; current: string; query?: string }) {
+export default function MonthPicker({ base, month, current, query = "", allowAll = false }: { base: string; month: string; current: string; query?: string; allowAll?: boolean }) {
   const router = useRouter();
-  const ym = month.slice(0, 7);
+  const all = month === "all";
+  const ym = all ? current.slice(0, 7) : month.slice(0, 7);
   const now = current.slice(0, 7);
   // The last two years up to next month, newest first (plus the selected month if it's outside that range).
   const options = Array.from({ length: 26 }, (_, i) => shift(now, 1 - i));
@@ -26,15 +27,16 @@ export default function MonthPicker({ base, month, current, query = "" }: { base
   );
   return (
     <div className="mp" role="group" aria-label="Month">
-      <Link className="mp-arrow" href={`${base}?month=${shift(ym, -1)}${q}`} aria-label="Previous month">{chevron("M15 18l-6-6 6-6")}</Link>
+      <Link className="mp-arrow" href={`${base}?month=${all ? ym : shift(ym, -1)}${q}`} aria-label="Previous month">{chevron("M15 18l-6-6 6-6")}</Link>
       <label className="mp-mid">
         <svg className="mp-cal" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg>
-        <select className="mp-select" value={ym} onChange={(e) => go(e.target.value)} aria-label="Choose month">
+        <select className="mp-select" value={all ? "all" : ym} onChange={(e) => go(e.target.value)} aria-label="Choose month">
+          {allowAll && <option value="all">All months</option>}
           {options.map((o) => <option key={o} value={o}>{label(o)}</option>)}
         </select>
         <svg className="mp-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
       </label>
-      <Link className="mp-arrow" href={`${base}?month=${shift(ym, 1)}${q}`} aria-label="Next month">{chevron("M9 18l6-6-6-6")}</Link>
+      <Link className="mp-arrow" href={`${base}?month=${all ? ym : shift(ym, 1)}${q}`} aria-label="Next month">{chevron("M9 18l6-6-6-6")}</Link>
     </div>
   );
 }
